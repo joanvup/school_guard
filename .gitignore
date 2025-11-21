@@ -4,8 +4,7 @@ __pycache__/
 venv/
 .venv/
 env/
-.env/
-.venv
+.env
 
 # Datos sensibles y Archivos generados
 *.pdf
