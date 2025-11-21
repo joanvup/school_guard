@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800">Reporte de Salidas</h2>
+</div>
+
+<!-- Filtros -->
+<div class="bg-white p-4 rounded shadow mb-6">
+    <form method="GET" action="/reports" class="flex flex-wrap items-end gap-4">
+        <div>
+            <label class="block text-sm font-bold text-gray-700">Desde</label>
+            <input type="date" name="date_start" value="{{ filters.date_start }}" class="border rounded p-2 text-sm">
+        </div>
+        <div>
+            <label class="block text-sm font-bold text-gray-700">Hasta</label>
+            <input type="date" name="date_end" value="{{ filters.date_end }}" class="border rounded p-2 text-sm">
+        </div>
+        <div>
+            <label class="block text-sm font-bold text-gray-700">Puerta</label>
+            <select name="door_id" class="border rounded p-2 text-sm bg-white">
+                <option value="">-- Todas --</option>
+                {% for door in doors %}
+                <option value="{{ door.id }}" {% if filters.door_id == door.id %}selected{% endif %}>{{ door.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex gap-2">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
+                <i class="fas fa-search mr-2"></i> Filtrar
+            </button>
+            <a href="/reports" class="bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-400">Limpiar</a>
+        </div>
+    </form>
+</div>
+
+<!-- Botón Exportar -->
+<div class="flex justify-end mb-2">
+    <a href="/reports/export?date_start={{ filters.date_start }}&date_end={{ filters.date_end }}&door_id={{ filters.door_id or '' }}" 
+       target="_blank"
+       class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 shadow">
+        <i class="fas fa-file-excel mr-2"></i> Exportar a Excel
+    </a>
+</div>
+
+<!-- Tabla de Resultados -->
+<div class="bg-white shadow-md rounded-lg overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full leading-normal" id="reportsTable">
+            <thead>
+                <tr>
+                    <!-- Agregamos onclick="sortTable(N)" y cursor-pointer -->
+                    <th onclick="sortTable(0)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                        Fecha / Hora <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                    <th onclick="sortTable(1)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                        Estudiante <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                    <th onclick="sortTable(2)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                        Curso <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                    <th onclick="sortTable(3)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                        Puerta <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                    <th onclick="sortTable(4)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                        Operador <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="reportsBody">
+                {% for log in logs %}
+                <tr>
+                    <!-- data-value guarda el ISO format para ordenar correctamente fechas -->
+                    <td data-value="{{ log.timestamp.isoformat() }}" class="px-5 py-5 border-b border-gray-200 bg-white text-sm font-mono">
+                        {{ log.timestamp.strftime('%Y-%m-%d %I:%M:%S %p') }}
+                    </td>
+                    <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">
+                        <div class="flex items-center">
+                            <div class="ml-3">
+                                <p class="text-gray-900 whitespace-no-wrap font-bold">
+                                    {{ log.student.full_name }}
+                                </p>
+                                <p class="text-gray-600 whitespace-no-wrap text-xs">
+                                    {{ log.student.student_id }}
+                                </p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">
+                        {{ log.student.course }}
+                    </td>
+                    <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">
+                        {{ log.door.name }}
+                    </td>
+                    <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm text-gray-500">
+                        {{ log.operator.username }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="px-5 py-5 border-b border-gray-200 bg-white text-sm text-center text-gray-500">
+                        No hay registros para este filtro.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    /**
+     * Función simple para ordenar tabla HTML
+     * @param {number} n - Índice de la columna (0 basado)
+     */
+    function sortTable(n) {
+        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById("reportsTable");
+        switching = true;
+        // Dirección inicial: Ascendente
+        dir = "asc"; 
+        
+        // Iconos visuales (Resetear todos)
+        const headers = table.getElementsByTagName("th");
+        for (let h of headers) {
+            let icon = h.querySelector('i');
+            if(icon) icon.className = "fas fa-sort ml-1 text-gray-400";
+        }
+        
+        while (switching) {
+            switching = false;
+            rows = table.rows;
+            
+            // Loop por todas las filas (excepto header)
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                
+                // Usar data-value si existe (para fechas), sino innerText
+                let xVal = x.getAttribute("data-value") || x.innerText.toLowerCase();
+                let yVal = y.getAttribute("data-value") || y.innerText.toLowerCase();
+
+                if (dir == "asc") {
+                    if (xVal > yVal) {
+                        shouldSwitch = true;
+                        break;
+                    }
+                } else if (dir == "desc") {
+                    if (xVal < yVal) {
+                        shouldSwitch = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount ++;      
+            } else {
+                if (switchcount == 0 && dir == "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+        
+        // Actualizar icono activo
+        let activeIcon = headers[n].querySelector('i');
+        if(activeIcon) {
+            activeIcon.className = dir === 'asc' ? "fas fa-sort-up ml-1 text-gray-800" : "fas fa-sort-down ml-1 text-gray-800";
+        }
+    }
+</script>
+{% endblock %}

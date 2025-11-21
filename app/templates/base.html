@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/static/icons/icon-192x192.png">
+    <title>School Guard - {{ title }}</title>
+    <!-- CSS Local Compilado -->
+    <link href="/static/css/main.css" rel="stylesheet">
+    <!-- FontAwesome Local -->
+    <link href="/static/css/fontawesome.css" rel="stylesheet">
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos específicos para móvil si hace falta */
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 font-sans antialiased">
+    <div class="min-h-screen flex flex-col md:flex-row">
+
+        <!-- Sidebar -->
+        <aside class="bg-slate-800 text-white w-full md:w-64 md:min-h-screen flex-shrink-0">
+            <div class="p-4 flex justify-between items-center md:block">
+                <div class="text-xl font-bold">School Guard 🛡️</div>
+                <button class="md:hidden text-gray-300 focus:outline-none"
+                    onclick="document.getElementById('menu').classList.toggle('hidden')">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+
+            <nav id="menu" class="hidden md:block px-2 pb-4 md:pb-0">
+                <div class="mt-4 mb-2 text-xs text-gray-400 uppercase px-2">Menu</div>
+
+                <!-- ACCESIBLE PARA TODOS -->
+                <a href="/dashboard"
+                    class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path == '/dashboard' else '' }}">
+                    <i class="fas fa-home w-6"></i> Dashboard
+                </a>
+                <a href="/scan"
+                    class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/scan') else '' }}">
+                    <i class="fas fa-qrcode w-6"></i> Escáner
+                </a>
+                <a href="/reports"
+                    class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/reports') else '' }}">
+                    <i class="fas fa-chart-bar w-6"></i> Reportes
+                </a>
+
+                <!-- SOLO ADMINISTRADORES -->
+                {% if user.role == "administrador" %}
+                <div class="mt-4 mb-2 text-xs text-gray-400 uppercase px-2">Administración</div>
+
+                <a href="/students"
+                    class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/students') else '' }}">
+                    <i class="fas fa-user-graduate w-6"></i> Estudiantes
+                </a>
+                <a href="/doors"
+                    class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/doors') else '' }}">
+                    <i class="fas fa-door-open w-6"></i> Puertas
+                </a>
+                <a href="/users"
+                    class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/users') else '' }}">
+                    <i class="fas fa-users-cog w-6"></i> Usuarios
+                </a>
+                {% endif %}
+
+                <div class="mt-8 border-t border-gray-700 pt-4">
+                    <div class="px-4 py-2 text-sm">
+                        <p class="text-gray-400">Usuario:</p>
+                        <p class="font-semibold">{{ user.username }}</p>
+                        <p class="text-xs text-gray-400 uppercase">{{ user.role.value if user.role.value else user.role
+                            }}</p>
+                    </div>
+                    <a href="/logout" class="block px-4 py-2 text-red-400 hover:text-red-300">
+                        <i class="fas fa-sign-out-alt w-6"></i> Salir
+                    </a>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-4 md:p-8 overflow-y-auto">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then(registration => {
+                        console.log('SW registrado con alcance:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('SW fallo al registrar:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800">Estudiantes</h2>
+
+    <!-- Mensajes de alerta -->
+    {% if request.query_params.get('msg') %}
+    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded relative mx-2" role="alert">
+        <span class="block sm:inline">{{ request.query_params.get('msg') }}</span>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded relative mx-2" role="alert">
+        <span class="block sm:inline">{{ request.query_params.get('error') }}</span>
+    </div>
+    {% endif %}
+
+    <div class="space-x-2 mt-4 md:mt-0 flex flex-wrap justify-center gap-2">
+
+        <!-- Grupo Importar -->
+        <div class="relative inline-block text-left group">
+            <button
+                class="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-2 px-4 rounded inline-flex items-center">
+                <i class="fas fa-upload mr-2"></i> Carga Masiva
+            </button>
+            <div class="absolute right-0 w-48 bg-white rounded-md shadow-lg hidden group-hover:block z-50 border">
+                <a href="/students/template" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Descargar
+                    Plantilla</a>
+                <button onclick="document.getElementById('modalImport').classList.remove('hidden')"
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Subir Excel</button>
+                <button onclick="document.getElementById('modalImportPhotos').classList.remove('hidden')"
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Subir Fotos ZIP</button>
+            </div>
+        </div>
+
+        <!-- Grupo Generar -->
+        <div class="relative inline-block text-left group">
+            <button
+                class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2 px-4 rounded inline-flex items-center">
+                <i class="fas fa-print mr-2"></i> Generar
+            </button>
+            <div class="absolute right-0 w-48 bg-white rounded-md shadow-lg hidden group-hover:block z-50 border">
+                <a href="/cards/batch/pdf" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-id-card mr-2"></i> Todos los Carnets (PDF)
+                </a>
+                <a href="/cards/batch/qr-images" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-qrcode mr-2"></i> Todos los QRs (ZIP)
+                </a>
+            </div>
+        </div>
+
+        <button onclick="document.getElementById('modalCreate').classList.remove('hidden')"
+            class="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-2 px-4 rounded inline-flex items-center">
+            <i class="fas fa-plus mr-2"></i> Nuevo
+        </button>
+    </div>
+</div>
+
+<!-- Tabla Responsive -->
+<div class="bg-white shadow-md rounded-lg overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full leading-normal">
+            <thead>
+                <tr>
+                    <th
+                        class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Foto</th>
+                    <th
+                        class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        ID</th>
+                    <th
+                        class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Nombre</th>
+                    <th
+                        class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Curso</th>
+                    <th
+                        class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Estado</th>
+                    <th
+                        class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr>
+                    <td class="px-5 py-2 border-b border-gray-200 bg-white text-sm">
+                        <div class="flex-shrink-0 w-10 h-10">
+                            {% if s.photo_path %}
+                            <!-- Agregamos onerror para que si falla la carga, muestre el avatar por defecto -->
+                            <img class="w-full h-full rounded-full object-cover border border-gray-300"
+                                src="{{ s.photo_path }}" alt="{{ s.full_name }}"
+                                onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name={{ s.full_name }}&background=random';">
+                            {% else %}
+                            <!-- Avatar generado con las iniciales si no hay path en BD -->
+                            <img class="w-full h-full rounded-full object-cover border border-gray-300"
+                                src="https://ui-avatars.com/api/?name={{ s.full_name }}&background=random"
+                                alt="No photo">
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 bg-white text-sm font-mono">{{ s.student_id }}</td>
+                    <td class="px-5 py-2 border-b border-gray-200 bg-white text-sm">{{ s.full_name }}</td>
+                    <td class="px-5 py-2 border-b border-gray-200 bg-white text-sm">{{ s.course }}</td>
+                    <td class="px-5 py-2 border-b border-gray-200 bg-white text-sm text-center">
+                        <a href="/students/toggle_auth/{{ s.id }}"
+                            class="relative inline-block px-3 py-1 font-semibold leading-tight cursor-pointer">
+                            <span aria-hidden="true"
+                                class="absolute inset-0 {{ 'bg-green-200' if s.is_authorized else 'bg-red-200' }} opacity-50 rounded-full"></span>
+                            <span
+                                class="relative text-xs {{ 'text-green-900' if s.is_authorized else 'text-red-900' }}">
+                                {{ 'AUTORIZADO' if s.is_authorized else 'NO SALE' }}
+                            </span>
+                        </a>
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 bg-white text-sm text-center">
+                        <a href="/cards/pdf/{{ s.student_id }}" target="_blank"
+                            class="text-blue-600 hover:text-blue-900 mx-1" title="Descargar Carnet PDF">
+                            <i class="fas fa-id-card"></i>
+                        </a>
+                        <a href="/students/delete/{{ s.id }}" onclick="return confirm('¿Eliminar estudiante?')"
+                            class="text-red-600 hover:text-red-900 mx-1" title="Eliminar">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Crear Individual -->
+<div id="modalCreate" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <h3 class="text-lg font-bold mb-4">Nuevo Estudiante</h3>
+        <form action="/students/create" method="POST" enctype="multipart/form-data">
+            <input class="w-full mb-3 p-2 border rounded" name="student_id" placeholder="ID / Carnet" required>
+            <input class="w-full mb-3 p-2 border rounded" name="full_name" placeholder="Nombre Completo" required>
+            <input class="w-full mb-3 p-2 border rounded" name="course" placeholder="Curso (ej. 11A)" required>
+
+            <label class="block text-sm text-gray-700 mb-1">Fotografía (Opcional)</label>
+            <input type="file" name="photo" accept="image/jpeg, image/png"
+                class="w-full mb-4 p-2 border rounded text-sm">
+
+            <label class="flex items-center mb-4">
+                <input type="checkbox" name="is_authorized" value="true" class="mr-2"> Autorizado a salir
+            </label>
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="document.getElementById('modalCreate').classList.add('hidden')"
+                    class="px-4 py-2 bg-gray-300 rounded">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Importar Excel -->
+<div id="modalImport" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <h3 class="text-lg font-bold mb-4">Importar Excel</h3>
+        <form action="/students/import" method="POST" enctype="multipart/form-data">
+            <p class="text-xs text-gray-500 mb-2">Columnas: ID, Nombre, Curso, Autorizado</p>
+            <input type="file" name="file" accept=".xlsx, .xls" class="w-full mb-4 p-2 border rounded" required>
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="document.getElementById('modalImport').classList.add('hidden')"
+                    class="px-4 py-2 bg-gray-300 rounded">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-green-500 text-white rounded">Subir Excel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Importar Fotos ZIP -->
+<div id="modalImportPhotos" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <h3 class="text-lg font-bold mb-4">Importar Fotos (ZIP)</h3>
+        <form action="/students/import-photos" method="POST" enctype="multipart/form-data">
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-2 mb-4">
+                <p class="text-xs text-yellow-700">
+                    <strong>Instrucciones:</strong><br>
+                    El archivo ZIP debe contener imágenes .jpg/.png.<br>
+                    El nombre de la imagen debe ser el ID del estudiante.<br>
+                    Ejemplo: <code>202301.jpg</code>
+                </p>
+            </div>
+            <input type="file" name="file" accept=".zip" class="w-full mb-4 p-2 border rounded" required>
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="document.getElementById('modalImportPhotos').classList.add('hidden')"
+                    class="px-4 py-2 bg-gray-300 rounded">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-purple-500 text-white rounded">Subir Fotos</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

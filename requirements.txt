@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pymysql
+python-multipart
+python-jose[cryptography]
+passlib
+python-dotenv
+jinja2
+email-validator
+pandas
+openpyxl
+qrcode[pil]
+reportlab
+Pillow
+pytz
+requests

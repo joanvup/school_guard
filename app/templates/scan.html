@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+    <!-- Cabecera -->
+    <div class="text-center mb-4">
+        <h2 class="text-2xl font-bold text-gray-800">Control de Salida</h2>
+        <p class="text-sm text-gray-500">Apunta la cámara al carnet</p>
+
+        <!-- Selector de Puerta (Dinámico) -->
+        <select id="doorSelect" class="mt-2 p-2 border rounded bg-white text-sm shadow-sm focus:border-blue-500">
+            {% for door in doors %}
+            <option value="{{ door.id }}">{{ door.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- Área de Cámara -->
+    <div class="bg-black rounded-lg overflow-hidden shadow-xl relative" style="min-height: 300px;">
+        <div id="reader" class="w-full h-full"></div>
+        <!-- Overlay de carga -->
+        <div id="camera-loading" class="absolute inset-0 flex items-center justify-center text-white">
+            <i class="fas fa-circle-notch fa-spin fa-2x"></i>
+        </div>
+    </div>
+
+    <!-- Área de Resultados -->
+    <div id="result-card" class="mt-6 hidden transition-all duration-300">
+        <div id="result-bg" class="rounded-lg shadow-lg p-6 text-center border-4">
+
+            <!-- Foto -->
+            <div class="flex justify-center mb-4">
+                <img id="res-photo" src="" class="w-24 h-24 rounded-full object-cover border-4 border-white shadow-sm">
+            </div>
+
+            <!-- Datos -->
+            <h3 id="res-name" class="text-xl font-bold text-gray-900 leading-tight mb-1"></h3>
+            <p id="res-course" class="text-gray-600 font-bold mb-2"></p>
+
+            <!-- Mensaje Grande -->
+            <div id="res-message-box"
+                class="py-2 px-4 rounded text-white font-bold text-lg uppercase tracking-wide mb-2">
+            </div>
+
+            <p id="res-time" class="text-xs text-gray-500 mt-2"></p>
+
+            <button onclick="resetScanner()"
+                class="mt-4 bg-gray-800 text-white px-6 py-2 rounded-full hover:bg-gray-700 w-full">
+                Siguiente Escaneo
+            </button>
+        </div>
+    </div>
+
+    <!-- Log reciente (Opcional, para ver historial rápido) -->
+    <div class="mt-8 border-t pt-4">
+        <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Escaneos recientes (Sesión)</h4>
+        <ul id="scan-log" class="text-sm text-gray-600 space-y-1">
+        </ul>
+    </div>
+
+</div>
+
+<!-- Sonidos -->
+<audio id="audio-success" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="audio-error" src="https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg"></audio>
+
+<!-- Librería QR Local -->
+<script src="/static/js/html5-qrcode.min.js"></script>
+
+<script>
+    let isProcessing = false;
+    let html5QrcodeScanner = null;
+
+    function onScanSuccess(decodedText, decodedResult) {
+        if (isProcessing) return; // Evitar doble lectura
+        isProcessing = true;
+
+        // Sonido "beep" corto al detectar
+        // (Opcional, los navegadores a veces bloquean audio sin interacción)
+
+        // Enviar al backend
+        fetch('/scan/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                qr_code: decodedText,
+                door_id: document.getElementById('doorSelect').value
+            })
+        })
+            .then(response => response.json())
+            .then(data => showResult(data))
+            .catch(err => {
+                console.error(err);
+                alert("Error de conexión");
+                isProcessing = false;
+            });
+    }
+
+    function showResult(data) {
+        const card = document.getElementById('result-card');
+        const bg = document.getElementById('result-bg');
+        const msgBox = document.getElementById('res-message-box');
+
+        card.classList.remove('hidden');
+
+        // Datos del estudiante
+        if (data.student) {
+            document.getElementById('res-name').innerText = data.student.name;
+            document.getElementById('res-course').innerText = data.student.course;
+            let photoSrc = data.student.photo ? data.student.photo : `https://ui-avatars.com/api/?name=${data.student.name}`;
+            document.getElementById('res-photo').src = photoSrc;
+        } else {
+            document.getElementById('res-name').innerText = "Desconocido";
+            document.getElementById('res-course').innerText = "---";
+            document.getElementById('res-photo').src = "https://ui-avatars.com/api/?name=Unknown";
+        }
+
+        msgBox.innerText = data.message;
+
+        // --- MANEJO DE ESTADOS ---
+
+        if (data.status === 'success') {
+            // ÉXITO (Verde)
+            bg.className = "rounded-lg shadow-lg p-6 text-center border-4 border-green-500 bg-green-50";
+            msgBox.className = "py-2 px-4 rounded bg-green-600 text-white font-bold text-lg uppercase tracking-wide";
+            document.getElementById('res-time').innerText = "Hora: " + data.timestamp;
+
+            try { document.getElementById('audio-success').play(); } catch (e) { }
+            addToLog(data.student.name, data.timestamp, true);
+            setTimeout(resetScanner, 3000);
+        }
+        else if (data.status === 'denied') {
+            // DENEGADO (Rojo)
+            bg.className = "rounded-lg shadow-lg p-6 text-center border-4 border-red-600 bg-red-50";
+            msgBox.className = "py-2 px-4 rounded bg-red-600 text-white font-bold text-2xl uppercase tracking-wide animate-pulse";
+            document.getElementById('res-time').innerText = "";
+
+            try { document.getElementById('audio-error').play(); } catch (e) { }
+            addToLog(data.student.name, "DENEGADO", false);
+        }
+        else if (data.status === 'warning') {
+            // NUEVO: ADVERTENCIA / YA SALIÓ (Naranja/Amarillo)
+            bg.className = "rounded-lg shadow-lg p-6 text-center border-4 border-orange-500 bg-orange-50";
+            msgBox.className = "py-2 px-4 rounded bg-orange-500 text-white font-bold text-xl uppercase tracking-wide";
+            document.getElementById('res-time').innerText = "Registro duplicado bloqueado";
+
+            // Usamos sonido de error para alertar
+            try { document.getElementById('audio-error').play(); } catch (e) { }
+            addToLog(data.student.name, "DUPLICADO", false);
+        }
+        else {
+            // ERROR / NO ENCONTRADO (Amarillo suave)
+            bg.className = "rounded-lg shadow-lg p-6 text-center border-4 border-yellow-500 bg-yellow-50";
+            msgBox.className = "py-2 px-4 rounded bg-yellow-600 text-white font-bold text-lg uppercase";
+            addToLog("ID: " + data.message, "ERROR", false);
+        }
+    }
+
+    function resetScanner() {
+        document.getElementById('result-card').classList.add('hidden');
+        isProcessing = false;
+    }
+
+    function addToLog(name, time, success) {
+        const list = document.getElementById('scan-log');
+        const li = document.createElement('li');
+        li.className = success ? "text-green-700" : "text-red-600 font-bold";
+        li.innerText = `[${time}] ${name}`;
+        list.insertBefore(li, list.firstChild);
+    }
+
+    // Iniciar cámara
+    function onScanFailure(error) {
+        // handle scan failure, usually better to ignore and keep scanning.
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader",
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            /* verbose= */ false
+        );
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+
+        // Ocultar loader cuando cargue (esto es un truco visual, la librería maneja su propio UI)
+        setTimeout(() => document.getElementById('camera-loading').classList.add('hidden'), 1000);
+    });
+</script>
+
+<style>
+    /* Ajustes para la librería de QR para que se vea más limpia */
+    #reader__scan_region {
+        background: white;
+    }
+
+    #reader__dashboard_section_csr button {
+        background-color: #2563eb;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 5px;
+        border: none;
+        margin-top: 10px;
+    }
+</style>
+{% endblock %}

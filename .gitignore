@@ -1,0 +1,25 @@
+# Python & Environment
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+.env/
+.venv
+
+# Datos sensibles y Archivos generados
+*.pdf
+*.zip
+*.xlsx
+
+# Archivos multimedia de usuarios (pero mantenemos la estructura de carpetas)
+app/static/photos/*
+!app/static/photos/.gitkeep
+app/static/icons/*
+!app/static/icons/.gitkeep
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
