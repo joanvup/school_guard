@@ -1,71 +1,57 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mb-6 flex flex-col md:flex-row justify-between items-end">
+<div class="mb-6 flex flex-col md:flex-row justify-between items-end gap-4">
     <div>
         <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
-        <p class="text-gray-500">Actividad del día: <span class="font-bold">{{
-                request.state.user.created_at.strftime('%Y-%m-%d') }}</span></p>
+        <div class="flex items-center mt-1">
+            <span class="text-gray-500 mr-2">Actividad del día:</span>
+            <!-- INPUT DE FECHA -->
+            <input type="date" id="datePicker" value="{{ today_date }}" 
+                   class="border rounded p-1 text-gray-700 font-bold bg-white shadow-sm focus:ring focus:ring-blue-200">
+        </div>
     </div>
-    <button onclick="location.reload()"
-        class="mt-2 md:mt-0 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 px-4 py-2 rounded shadow-sm text-sm font-semibold transition">
-        <i class="fas fa-sync-alt mr-1"></i> Actualizar Datos
+    <button onclick="updateDashboard()" class="text-blue-600 hover:text-blue-800 text-sm font-semibold">
+        <i class="fas fa-sync-alt mr-1"></i> Refrescar Datos
     </button>
 </div>
 
 <!-- KPIs / Tarjetas -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-
-    <!-- Card 1: Salidas Hoy -->
-    <div onclick="openDetailsModal('all')"
-        class="bg-white rounded-lg shadow p-5 border-l-4 border-blue-500 cursor-pointer hover:shadow-md transition group">
+    
+    <!-- Card 1: Salidas (Clickable) -->
+    <div onclick="openDetailsModal('all')" class="bg-white rounded-lg shadow p-5 border-l-4 border-blue-500 cursor-pointer hover:bg-blue-50 transition transform hover:scale-105">
         <div class="flex items-center justify-between">
             <div class="flex items-center">
-                <div class="flex-shrink-0 bg-blue-100 rounded-full p-3 group-hover:bg-blue-200 transition">
+                <div class="flex-shrink-0 bg-blue-100 rounded-full p-3">
                     <i class="fas fa-walking text-blue-600 text-xl"></i>
                 </div>
                 <div class="ml-4">
-                    <p class="text-gray-500 text-sm font-medium uppercase">Salidas Hoy</p>
-                    <p class="text-3xl font-bold text-gray-800">{{ stats.exits_today }}</p>
+                    <p class="text-gray-500 text-sm font-medium uppercase">Total Salidas</p>
+                    <!-- ID para actualizar -->
+                    <p id="kpi-exits" class="text-3xl font-bold text-gray-800">...</p>
                 </div>
             </div>
-            <div class="text-gray-300 group-hover:text-blue-500">
+            <div class="text-blue-400">
                 <i class="fas fa-chevron-right"></i>
             </div>
         </div>
-        <p class="text-xs text-blue-500 mt-2 text-center font-semibold opacity-0 group-hover:opacity-100 transition">Ver
-            listado completo</p>
+        <p class="text-xs text-blue-500 mt-2 text-center font-semibold">Ver detalles</p>
     </div>
 
-    <!-- Card 2: Salidas por Puerta -->
-    <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+    <!-- Card 2: Puertas (Lista Clickable) -->
+    <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500 md:col-span-1">
         <div class="flex items-center mb-3">
             <div class="flex-shrink-0 bg-green-100 rounded-full p-2 mr-3">
                 <i class="fas fa-door-open text-green-600"></i>
             </div>
             <p class="text-gray-500 text-sm font-medium uppercase">Salidas por Puerta</p>
         </div>
-
-        <!-- Contenedor con scroll si hay muchas puertas -->
-        <div class="space-y-3 overflow-y-auto custom-scrollbar" style="max-height: 160px;">
-            {% for door in stats.doors_data %}
-            <div onclick="openDetailsModal('door', {{ door.id }}, '{{ door.name }}')"
-                class="cursor-pointer hover:bg-green-50 p-2 rounded border border-transparent hover:border-green-100 transition">
-                <div class="flex justify-between text-sm mb-1">
-                    <span class="font-bold text-gray-700">{{ door.name }}</span>
-                    <span class="font-bold text-gray-800">{{ door.count }} <span
-                            class="text-xs text-gray-500 font-normal">({{ door.percent }}%)</span></span>
-                </div>
-                <div class="w-full bg-gray-100 rounded-full h-2">
-                    <div class="bg-green-500 h-2 rounded-full transition-all duration-500"
-                        style="width: {{ door.percent }}%"></div>
-                </div>
-            </div>
-            {% else %}
-            <div class="text-center py-4 text-gray-400 text-sm">
-                <i class="fas fa-info-circle mb-1"></i><br>No hay puertas activas
-            </div>
-            {% endfor %}
+        
+        <!-- Contenedor de lista dinámica -->
+        <div id="doors-list-container" class="space-y-3 max-h-40 overflow-y-auto pr-1">
+            <!-- Se llena con JS -->
+            <p class="text-gray-400 text-center py-4">Cargando...</p>
         </div>
     </div>
 
@@ -77,167 +63,147 @@
             </div>
             <div class="ml-4">
                 <p class="text-gray-500 text-sm font-medium uppercase">Total Estudiantes</p>
-                <p class="text-3xl font-bold text-gray-800">{{ stats.total_students }}</p>
+                <p id="kpi-students" class="text-3xl font-bold text-gray-800">...</p>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Charts Section -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-    <!-- Chart 1: Line Time -->
-    <div class="bg-white rounded-lg shadow p-4 flex flex-col">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="bg-white rounded-lg shadow p-4">
         <h3 class="text-lg font-bold text-gray-700 mb-4">Salidas por Hora</h3>
-        <div class="relative h-64 w-full flex-1">
+        <div class="relative h-64">
             <canvas id="chartTimeline"></canvas>
-            <div id="noDataTimeline"
-                class="hidden absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
-                Sin datos de actividad hoy
-            </div>
         </div>
     </div>
-
-    <!-- Chart 2: Pie Courses -->
-    <div class="bg-white rounded-lg shadow p-4 flex flex-col">
-        <h3 class="text-lg font-bold text-gray-700 mb-4">Salidas por Curso (%)</h3>
-        <div class="relative h-64 w-full flex-1 flex justify-center">
+    <div class="bg-white rounded-lg shadow p-4">
+        <h3 class="text-lg font-bold text-gray-700 mb-4">Salidas por Curso</h3>
+        <div class="relative h-64 flex justify-center">
             <canvas id="chartCourses"></canvas>
-            <div id="noDataCourses"
-                class="hidden absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
-                Sin salidas registradas hoy
-            </div>
         </div>
     </div>
 </div>
 
 <!-- MODAL DETALLES -->
-<div id="detailModal"
-    class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden flex items-center justify-center z-50 backdrop-blur-sm transition-opacity">
-    <div
-        class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col max-h-[85vh] transform transition-all scale-100">
-        <!-- Header -->
-        <div class="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
-            <h3 id="modalTitle" class="text-xl font-bold text-gray-800">Detalle</h3>
-            <button onclick="closeModal()"
-                class="text-gray-400 hover:text-red-500 text-2xl font-bold focus:outline-none">&times;</button>
+<div id="detailModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="bg-gray-100 px-6 py-4 border-b flex justify-between items-center">
+            <h3 id="modalTitle" class="text-lg font-bold text-gray-800">Detalle de Salidas</h3>
+            <button onclick="closeModal()" class="text-gray-500 hover:text-red-500 text-2xl">&times;</button>
         </div>
-
-        <!-- Body -->
-        <div class="p-0 overflow-y-auto flex-1 bg-white">
-            <div id="modalLoader" class="flex justify-center py-12 hidden">
-                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+        <div class="p-6 overflow-y-auto flex-1">
+            <div id="modalLoader" class="flex justify-center py-10 hidden">
+                <i class="fas fa-circle-notch fa-spin text-blue-500 text-3xl"></i>
             </div>
-
             <table class="min-w-full leading-normal hidden" id="modalTable">
-                <thead class="bg-gray-100 sticky top-0">
+                <thead>
                     <tr>
-                        <th
-                            class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b">
-                            Estudiante</th>
-                        <th
-                            class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b">
-                            Curso</th>
-                        <th
-                            class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b">
-                            Hora</th>
-                        <th
-                            class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b">
-                            Puerta</th>
+                        <th class="px-4 py-2 border-b-2 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase">Estudiante</th>
+                        <th class="px-4 py-2 border-b-2 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase">Curso</th>
+                        <th class="px-4 py-2 border-b-2 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase">Hora</th>
+                        <th class="px-4 py-2 border-b-2 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase">Puerta</th>
                     </tr>
                 </thead>
-                <tbody id="modalContent" class="divide-y divide-gray-200">
-                    <!-- Rows here -->
-                </tbody>
+                <tbody id="modalContent"></tbody>
             </table>
-
-            <div id="modalEmpty" class="text-center py-12 hidden">
-                <div class="text-gray-300 text-5xl mb-3"><i class="fas fa-clipboard-list"></i></div>
-                <p class="text-gray-500">No se encontraron registros para este criterio.</p>
-            </div>
+            <p id="modalEmpty" class="text-center text-gray-500 py-4 hidden">No se encontraron registros en esta fecha.</p>
         </div>
-
-        <!-- Footer -->
-        <div class="bg-gray-50 px-6 py-3 border-t flex justify-end">
-            <button onclick="closeModal()"
-                class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 font-semibold py-2 px-6 rounded shadow-sm transition">
-                Cerrar
-            </button>
+        <div class="bg-gray-50 px-6 py-3 border-t text-right">
+            <button onclick="closeModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded">Cerrar</button>
         </div>
     </div>
 </div>
-<!-- Chart.js Local -->
+
+<!-- Scripts -->
 <script src="/static/js/chart.min.js"></script>
 <script>
-    // --- LOGICA DE GRÁFICAS ---
-    async function loadCharts() {
+    let chartTimelineInstance = null;
+    let chartCoursesInstance = null;
+
+    // 1. Función Principal de Actualización
+    async function updateDashboard() {
+        const selectedDate = document.getElementById('datePicker').value;
+        
+        // A. Actualizar KPIs y Lista Puertas
         try {
-            const response = await fetch('/api/dashboard/chart-data');
-            const data = await response.json();
-
-            // 1. Gráfica de Línea (Timeline)
-            const ctxTime = document.getElementById('chartTimeline');
-            // Verificar si hay datos (suma de valores > 0)
-            const totalTime = data.timeline.data.reduce((a, b) => a + b, 0);
-
-            if (totalTime > 0) {
-                new Chart(ctxTime, {
-                    type: 'line',
-                    data: {
-                        labels: data.timeline.labels,
-                        datasets: [{
-                            label: 'Salidas',
-                            data: data.timeline.data,
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 4
-                        }]
-                    },
-                    options: { maintainAspectRatio: false, responsive: true }
-                });
+            const res = await fetch(`/api/dashboard/stats?date=${selectedDate}`);
+            const stats = await res.json();
+            
+            // Actualizar Números
+            document.getElementById('kpi-exits').innerText = stats.exits_count;
+            document.getElementById('kpi-students').innerText = stats.total_students;
+            
+            // Actualizar Lista Puertas (HTML dinámico)
+            const doorContainer = document.getElementById('doors-list-container');
+            doorContainer.innerHTML = '';
+            
+            if (stats.doors_data.length === 0) {
+                doorContainer.innerHTML = '<p class="text-sm text-gray-400 text-center py-2">Sin actividad</p>';
             } else {
-                document.getElementById('noDataTimeline').classList.remove('hidden');
-            }
-
-            // 2. Gráfica de Torta (Cursos)
-            const ctxCourses = document.getElementById('chartCourses');
-            const totalCourses = data.courses.data.reduce((a, b) => a + b, 0);
-
-            if (totalCourses > 0) {
-                new Chart(ctxCourses, {
-                    type: 'pie',
-                    data: {
-                        labels: data.courses.labels,
-                        datasets: [{
-                            data: data.courses.data,
-                            backgroundColor: [
-                                '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
-                                '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        maintainAspectRatio: false,
-                        responsive: true,
-                        plugins: {
-                            legend: { position: 'right' }
-                        }
-                    }
+                stats.doors_data.forEach(door => {
+                    const html = `
+                    <div onclick="openDetailsModal('door', ${door.id}, '${door.name}')" class="cursor-pointer hover:bg-green-50 p-1 rounded group">
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="font-bold text-gray-700 group-hover:text-green-700">${door.name}</span>
+                            <span class="font-bold text-gray-800">${door.count} <span class="text-xs text-gray-500 font-normal">(${door.percent}%)</span></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-green-500 h-2 rounded-full" style="width: ${door.percent}%"></div>
+                        </div>
+                    </div>`;
+                    doorContainer.innerHTML += html;
                 });
-            } else {
-                document.getElementById('noDataCourses').classList.remove('hidden');
             }
+        } catch (e) { console.error("Error fetching stats", e); }
 
-        } catch (error) {
-            console.error("Error cargando gráficas:", error);
-        }
+        // B. Actualizar Gráficas
+        try {
+            const res = await fetch(`/api/dashboard/chart-data?date=${selectedDate}`);
+            const data = await res.json();
+            
+            // Si ya existen, destruir para recrear (forma más limpia de actualizar)
+            if (chartTimelineInstance) chartTimelineInstance.destroy();
+            if (chartCoursesInstance) chartCoursesInstance.destroy();
+            
+            chartTimelineInstance = new Chart(document.getElementById('chartTimeline'), {
+                type: 'line',
+                data: {
+                    labels: data.timeline.labels,
+                    datasets: [{
+                        label: 'Salidas',
+                        data: data.timeline.data,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: { maintainAspectRatio: false }
+            });
+
+            chartCoursesInstance = new Chart(document.getElementById('chartCourses'), {
+                type: 'pie',
+                data: {
+                    labels: data.courses.labels,
+                    datasets: [{
+                        data: data.courses.data,
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'],
+                    }]
+                },
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            });
+
+        } catch (e) { console.error("Error fetching charts", e); }
     }
 
-    document.addEventListener('DOMContentLoaded', loadCharts);
+    // 2. Event Listener para el cambio de fecha
+    document.getElementById('datePicker').addEventListener('change', updateDashboard);
 
-    // --- LOGICA DEL MODAL ---
+    // 3. Cargar al inicio
+    document.addEventListener('DOMContentLoaded', updateDashboard);
+
+    // --- MODAL LOGIC ---
     const modal = document.getElementById('detailModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalContent = document.getElementById('modalContent');
@@ -245,13 +211,15 @@
     const modalLoader = document.getElementById('modalLoader');
     const modalEmpty = document.getElementById('modalEmpty');
 
-    function openDetailsModal(type, id = null, name = '') {
+    function openDetailsModal(type, id=null, name='') {
+        const selectedDate = document.getElementById('datePicker').value;
+        
         modal.classList.remove('hidden');
-
+        
         if (type === 'all') {
-            modalTitle.innerText = "Todas las salidas de Hoy";
+            modalTitle.innerText = `Todas las salidas (${selectedDate})`;
         } else {
-            modalTitle.innerText = "Salidas: " + name;
+            modalTitle.innerText = `Salidas por ${name} (${selectedDate})`;
         }
 
         modalContent.innerHTML = '';
@@ -259,78 +227,44 @@
         modalEmpty.classList.add('hidden');
         modalLoader.classList.remove('hidden');
 
-        let url = `/api/dashboard/details?type=${type}`;
+        // Fetch con fecha seleccionada
+        let url = `/api/dashboard/details?type=${type}&date=${selectedDate}`;
         if (id) url += `&id=${id}`;
 
         fetch(url)
             .then(res => res.json())
             .then(data => {
                 modalLoader.classList.add('hidden');
-
                 if (data.length === 0) {
                     modalEmpty.classList.remove('hidden');
                     return;
                 }
-
                 modalTable.classList.remove('hidden');
-
                 data.forEach(item => {
-                    let avatar = item.photo
-                        ? `<img src="${item.photo}" class="w-10 h-10 rounded-full object-cover border border-gray-200 shadow-sm">`
-                        : `<div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600 border border-blue-200">${item.name.substring(0, 2)}</div>`;
+                    let avatar = item.photo 
+                        ? `<img src="${item.photo}" class="w-8 h-8 rounded-full object-cover border">` 
+                        : `<div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500">${item.name.substring(0,2)}</div>`;
 
                     let row = `
-                        <tr class="hover:bg-blue-50 transition border-b last:border-0">
-                            <td class="px-6 py-3 flex items-center gap-3">
+                        <tr class="hover:bg-gray-50 border-b">
+                            <td class="px-4 py-3 flex items-center gap-3">
                                 ${avatar}
-                                <span class="font-medium text-gray-900">${item.name}</span>
+                                <span class="font-medium text-gray-800">${item.name}</span>
                             </td>
-                            <td class="px-6 py-3 text-sm text-gray-600">${item.course}</td>
-                            <td class="px-6 py-3 text-sm font-mono font-bold text-blue-600 bg-blue-50 rounded-lg inline-block my-2">${item.time}</td>
-                            <td class="px-6 py-3 text-xs text-gray-500 uppercase tracking-wide">${item.door}</td>
-                        </tr>
-                    `;
+                            <td class="px-4 py-3 text-sm text-gray-600">${item.course}</td>
+                            <td class="px-4 py-3 text-sm font-mono font-bold text-blue-600">${item.time}</td>
+                            <td class="px-4 py-3 text-xs text-gray-500">${item.door}</td>
+                        </tr>`;
                     modalContent.innerHTML += row;
                 });
             })
-            .catch(err => {
-                console.error(err);
-                modalLoader.classList.add('hidden');
-                modalEmpty.classList.remove('hidden');
-            });
+            .catch(err => console.error(err));
     }
 
-    function closeModal() {
-        modal.classList.add('hidden');
-    }
+    function closeModal() { modal.classList.add('hidden'); }
+    
+    modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', function(event) { if (event.key === "Escape") closeModal(); });
 
-    window.onclick = function (event) {
-        if (event.target == modal) {
-            closeModal();
-        }
-    }
-
-    document.addEventListener('keydown', function (e) {
-        if (e.key === "Escape") closeModal();
-    });
 </script>
-
-<style>
-    .custom-scrollbar::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar-track {
-        background: #f1f1f1;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #d1d5db;
-        border-radius: 3px;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #9ca3af;
-    }
-</style>
 {% endblock %}

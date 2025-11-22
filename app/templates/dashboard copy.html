@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-6 flex flex-col md:flex-row justify-between items-end">
+    <div>
+        <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
+        <p class="text-gray-500">Actividad del día: <span class="font-bold">{{
+                request.state.user.created_at.strftime('%Y-%m-%d') }}</span></p>
+    </div>
+    <button onclick="location.reload()"
+        class="mt-2 md:mt-0 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 px-4 py-2 rounded shadow-sm text-sm font-semibold transition">
+        <i class="fas fa-sync-alt mr-1"></i> Actualizar Datos
+    </button>
+</div>
+
+<!-- KPIs / Tarjetas -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+
+    <!-- Card 1: Salidas Hoy -->
+    <div onclick="openDetailsModal('all')"
+        class="bg-white rounded-lg shadow p-5 border-l-4 border-blue-500 cursor-pointer hover:shadow-md transition group">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 bg-blue-100 rounded-full p-3 group-hover:bg-blue-200 transition">
+                    <i class="fas fa-walking text-blue-600 text-xl"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-gray-500 text-sm font-medium uppercase">Salidas Hoy</p>
+                    <p class="text-3xl font-bold text-gray-800">{{ stats.exits_today }}</p>
+                </div>
+            </div>
+            <div class="text-gray-300 group-hover:text-blue-500">
+                <i class="fas fa-chevron-right"></i>
+            </div>
+        </div>
+        <p class="text-xs text-blue-500 mt-2 text-center font-semibold opacity-0 group-hover:opacity-100 transition">Ver
+            listado completo</p>
+    </div>
+
+    <!-- Card 2: Salidas por Puerta -->
+    <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+        <div class="flex items-center mb-3">
+            <div class="flex-shrink-0 bg-green-100 rounded-full p-2 mr-3">
+                <i class="fas fa-door-open text-green-600"></i>
+            </div>
+            <p class="text-gray-500 text-sm font-medium uppercase">Salidas por Puerta</p>
+        </div>
+
+        <!-- Contenedor con scroll si hay muchas puertas -->
+        <div class="space-y-3 overflow-y-auto custom-scrollbar" style="max-height: 160px;">
+            {% for door in stats.doors_data %}
+            <div onclick="openDetailsModal('door', {{ door.id }}, '{{ door.name }}')"
+                class="cursor-pointer hover:bg-green-50 p-2 rounded border border-transparent hover:border-green-100 transition">
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="font-bold text-gray-700">{{ door.name }}</span>
+                    <span class="font-bold text-gray-800">{{ door.count }} <span
+                            class="text-xs text-gray-500 font-normal">({{ door.percent }}%)</span></span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2">
+                    <div class="bg-green-500 h-2 rounded-full transition-all duration-500"
+                        style="width: {{ door.percent }}%"></div>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-gray-400 text-sm">
+                <i class="fas fa-info-circle mb-1"></i><br>No hay puertas activas
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Card 3: Estudiantes -->
+    <div class="bg-white rounded-lg shadow p-5 border-l-4 border-purple-500">
+        <div class="flex items-center">
+            <div class="flex-shrink-0 bg-purple-100 rounded-full p-3">
+                <i class="fas fa-users text-purple-600 text-xl"></i>
+            </div>
+            <div class="ml-4">
+                <p class="text-gray-500 text-sm font-medium uppercase">Total Estudiantes</p>
+                <p class="text-3xl font-bold text-gray-800">{{ stats.total_students }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Section -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+    <!-- Chart 1: Line Time -->
+    <div class="bg-white rounded-lg shadow p-4 flex flex-col">
+        <h3 class="text-lg font-bold text-gray-700 mb-4">Salidas por Hora</h3>
+        <div class="relative h-64 w-full flex-1">
+            <canvas id="chartTimeline"></canvas>
+            <div id="noDataTimeline"
+                class="hidden absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
+                Sin datos de actividad hoy
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart 2: Pie Courses -->
+    <div class="bg-white rounded-lg shadow p-4 flex flex-col">
+        <h3 class="text-lg font-bold text-gray-700 mb-4">Salidas por Curso (%)</h3>
+        <div class="relative h-64 w-full flex-1 flex justify-center">
+            <canvas id="chartCourses"></canvas>
+            <div id="noDataCourses"
+                class="hidden absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
+                Sin salidas registradas hoy
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DETALLES -->
+<div id="detailModal"
+    class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden flex items-center justify-center z-50 backdrop-blur-sm transition-opacity">
+    <div
+        class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col max-h-[85vh] transform transition-all scale-100">
+        <!-- Header -->
+        <div class="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
+            <h3 id="modalTitle" class="text-xl font-bold text-gray-800">Detalle</h3>
+            <button onclick="closeModal()"
+                class="text-gray-400 hover:text-red-500 text-2xl font-bold focus:outline-none">&times;</button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-0 overflow-y-auto flex-1 bg-white">
+            <div id="modalLoader" class="flex justify-center py-12 hidden">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+            </div>
+
+            <table class="min-w-full leading-normal hidden" id="modalTable">
+                <thead class="bg-gray-100 sticky top-0">
+                    <tr>
+                        <th
+                            class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b">
+                            Estudiante</th>
+                        <th
+                            class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b">
+                            Curso</th>
+                        <th
+                            class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b">
+                            Hora</th>
+                        <th
+                            class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b">
+                            Puerta</th>
+                    </tr>
+                </thead>
+                <tbody id="modalContent" class="divide-y divide-gray-200">
+                    <!-- Rows here -->
+                </tbody>
+            </table>
+
+            <div id="modalEmpty" class="text-center py-12 hidden">
+                <div class="text-gray-300 text-5xl mb-3"><i class="fas fa-clipboard-list"></i></div>
+                <p class="text-gray-500">No se encontraron registros para este criterio.</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-gray-50 px-6 py-3 border-t flex justify-end">
+            <button onclick="closeModal()"
+                class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 font-semibold py-2 px-6 rounded shadow-sm transition">
+                Cerrar
+            </button>
+        </div>
+    </div>
+</div>
+<!-- Chart.js Local -->
+<script src="/static/js/chart.min.js"></script>
+<script>
+    // --- LOGICA DE GRÁFICAS ---
+    async function loadCharts() {
+        try {
+            const response = await fetch('/api/dashboard/chart-data');
+            const data = await response.json();
+
+            // 1. Gráfica de Línea (Timeline)
+            const ctxTime = document.getElementById('chartTimeline');
+            // Verificar si hay datos (suma de valores > 0)
+            const totalTime = data.timeline.data.reduce((a, b) => a + b, 0);
+
+            if (totalTime > 0) {
+                new Chart(ctxTime, {
+                    type: 'line',
+                    data: {
+                        labels: data.timeline.labels,
+                        datasets: [{
+                            label: 'Salidas',
+                            data: data.timeline.data,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4
+                        }]
+                    },
+                    options: { maintainAspectRatio: false, responsive: true }
+                });
+            } else {
+                document.getElementById('noDataTimeline').classList.remove('hidden');
+            }
+
+            // 2. Gráfica de Torta (Cursos)
+            const ctxCourses = document.getElementById('chartCourses');
+            const totalCourses = data.courses.data.reduce((a, b) => a + b, 0);
+
+            if (totalCourses > 0) {
+                new Chart(ctxCourses, {
+                    type: 'pie',
+                    data: {
+                        labels: data.courses.labels,
+                        datasets: [{
+                            data: data.courses.data,
+                            backgroundColor: [
+                                '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
+                                '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'right' }
+                        }
+                    }
+                });
+            } else {
+                document.getElementById('noDataCourses').classList.remove('hidden');
+            }
+
+        } catch (error) {
+            console.error("Error cargando gráficas:", error);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadCharts);
+
+    // --- LOGICA DEL MODAL ---
+    const modal = document.getElementById('detailModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalContent = document.getElementById('modalContent');
+    const modalTable = document.getElementById('modalTable');
+    const modalLoader = document.getElementById('modalLoader');
+    const modalEmpty = document.getElementById('modalEmpty');
+
+    function openDetailsModal(type, id = null, name = '') {
+        modal.classList.remove('hidden');
+
+        if (type === 'all') {
+            modalTitle.innerText = "Todas las salidas de Hoy";
+        } else {
+            modalTitle.innerText = "Salidas: " + name;
+        }
+
+        modalContent.innerHTML = '';
+        modalTable.classList.add('hidden');
+        modalEmpty.classList.add('hidden');
+        modalLoader.classList.remove('hidden');
+
+        let url = `/api/dashboard/details?type=${type}`;
+        if (id) url += `&id=${id}`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                modalLoader.classList.add('hidden');
+
+                if (data.length === 0) {
+                    modalEmpty.classList.remove('hidden');
+                    return;
+                }
+
+                modalTable.classList.remove('hidden');
+
+                data.forEach(item => {
+                    let avatar = item.photo
+                        ? `<img src="${item.photo}" class="w-10 h-10 rounded-full object-cover border border-gray-200 shadow-sm">`
+                        : `<div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600 border border-blue-200">${item.name.substring(0, 2)}</div>`;
+
+                    let row = `
+                        <tr class="hover:bg-blue-50 transition border-b last:border-0">
+                            <td class="px-6 py-3 flex items-center gap-3">
+                                ${avatar}
+                                <span class="font-medium text-gray-900">${item.name}</span>
+                            </td>
+                            <td class="px-6 py-3 text-sm text-gray-600">${item.course}</td>
+                            <td class="px-6 py-3 text-sm font-mono font-bold text-blue-600 bg-blue-50 rounded-lg inline-block my-2">${item.time}</td>
+                            <td class="px-6 py-3 text-xs text-gray-500 uppercase tracking-wide">${item.door}</td>
+                        </tr>
+                    `;
+                    modalContent.innerHTML += row;
+                });
+            })
+            .catch(err => {
+                console.error(err);
+                modalLoader.classList.add('hidden');
+                modalEmpty.classList.remove('hidden');
+            });
+    }
+
+    function closeModal() {
+        modal.classList.add('hidden');
+    }
+
+    window.onclick = function (event) {
+        if (event.target == modal) {
+            closeModal();
+        }
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === "Escape") closeModal();
+    });
+</script>
+
+<style>
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #d1d5db;
+        border-radius: 3px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #9ca3af;
+    }
+</style>
+{% endblock %}
