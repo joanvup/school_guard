@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, UploadFile, File, HTTPException, Response
+from fastapi import APIRouter, Depends, Form, UploadFile, File, HTTPException, Response, Query
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -7,9 +7,11 @@ import pandas as pd
 import io
 import os
 import shutil
-import zipfile
+import zipfile 
 from .. import database, models, schemas, deps
 from starlette.requests import Request
+import math
+from sqlalchemy import or_
 
 router = APIRouter(
     prefix="/students",
@@ -26,11 +28,53 @@ os.makedirs(PHOTOS_DIR, exist_ok=True)
 # --- VISTAS ---
 
 @router.get("/")
-def list_students(request: Request, db: Session = Depends(database.get_db)):
-    # Ordenar por fecha de creación descendente para ver los nuevos primero
-    students = db.query(models.Student).order_by(models.Student.created_at.desc()).all()
-    return templates.TemplateResponse("students.html", {"request": request, "students": students, "user": request.state.user})
-
+def list_students(
+    request: Request, 
+    page: int = Query(1, ge=1), # Página actual, defecto 1
+    q: str = Query(None),       # Término de búsqueda
+    db: Session = Depends(database.get_db)
+):
+    LIMIT = 10 # Cantidad de estudiantes por página
+    
+    # Consulta base
+    query = db.query(models.Student)
+    
+    # Aplicar búsqueda si existe
+    if q:
+        search_fmt = f"%{q}%"
+        # Busca por Nombre O por ID
+        query = query.filter(
+            or_(
+                models.Student.full_name.ilike(search_fmt),
+                models.Student.student_id.ilike(search_fmt)
+            )
+        )
+    
+    # Contar total de resultados (para saber cuántas páginas hay)
+    total_records = query.count()
+    total_pages = math.ceil(total_records / LIMIT)
+    
+    # Calcular offset
+    offset = (page - 1) * LIMIT
+    
+    # Obtener registros de la página actual
+    # Ordenamos por creación descendente para ver los nuevos, o por nombre si prefieres
+    students = query.order_by(models.Student.created_at.desc()).offset(offset).limit(LIMIT).all()
+    
+    return templates.TemplateResponse("students.html", {
+        "request": request, 
+        "students": students, 
+        "user": request.state.user,
+        # Datos para paginación en el frontend
+        "pagination": {
+            "page": page,
+            "total_pages": total_pages,
+            "total_records": total_records,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
+            "q": q or "" # Devolver el término de búsqueda para mantenerlo en el input
+        }
+    })
 # --- API / ACCIONES ---
 
 @router.post("/create")
