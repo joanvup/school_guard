@@ -2,7 +2,7 @@
 ALTER TABLE students ADD COLUMN rfid_code VARCHAR(50) UNIQUE DEFAULT NULL;
 ALTER TABLE students ADD COLUMN has_lunch BOOLEAN DEFAULT FALSE;
 ALTER TABLE students ADD COLUMN lunch_type ENUM('Normal', 'Especial', 'Ninguno') DEFAULT 'Ninguno';
-ALTER TABLE users MODIFY COLUMN role VARCHAR(50) NOT NULL DEFAULT 'operador';
+
 -- 2. Crear tabla Employees
 CREATE TABLE employees (
     id INT AUTO_INCREMENT PRIMARY KEY,
