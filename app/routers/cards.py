@@ -23,6 +23,7 @@ CARD_WIDTH = 54 * mm
 CARD_HEIGHT = 85 * mm
 ASSETS_DIR = "app/static/assets"
 BG_PATH = os.path.join(ASSETS_DIR, "carnet_bg.png")
+AVATAR_PATH = os.path.join(ASSETS_DIR, "avatar.png")
 TEXT_MARGIN = 4 * mm
 MAX_TEXT_WIDTH = CARD_WIDTH - (2 * TEXT_MARGIN)
 
@@ -54,27 +55,38 @@ def draw_card(c: canvas.Canvas, person, is_employee=False):
 
     # 2. Foto (Circular)
     photo_size = 30 * mm
-    photo_y = 45 * mm
+    photo_y = 43 * mm
     photo_x = (CARD_WIDTH - photo_size) / 2
     radius = photo_size / 2
-    
-    # Resolver ruta de foto
-    photo_path = None
+    # LÓGICA DE SELECCIÓN DE IMAGEN
+    image_to_draw = None
+
+    # 1. Intentar buscar foto personal
     if person.photo_path:
         sys_path = person.photo_path.lstrip("/")
-        if os.path.exists(f"app{person.photo_path}"): photo_path = f"app{person.photo_path}"
-        elif os.path.exists(sys_path): photo_path = sys_path
+        if os.path.exists(f"app{person.photo_path}"):
+            image_to_draw = f"app{person.photo_path}"
+        elif os.path.exists(sys_path):
+            image_to_draw = sys_path
+    
+    # 2. Si no se encontró foto personal, usar Avatar Genérico
+    if not image_to_draw and os.path.exists(AVATAR_PATH):
+        image_to_draw = AVATAR_PATH
     
     c.saveState()
     path = c.beginPath()
     path.circle(photo_x + radius, photo_y + radius, radius) 
     c.clipPath(path, stroke=0, fill=0)
     
-    if photo_path:
-        try: c.drawImage(photo_path, photo_x, photo_y, width=photo_size, height=photo_size)
-        except: c.setFillColorRGB(0.8,0.8,0.8); c.rect(photo_x, photo_y, photo_size, photo_size, fill=1)
+    if image_to_draw:
+        try:
+            c.drawImage(image_to_draw, photo_x, photo_y, width=photo_size, height=photo_size, mask=None) 
+        except:
+            c.setFillColorRGB(0.9, 0.9, 0.9)
+            c.rect(photo_x, photo_y, photo_size, photo_size, fill=1)
     else:
-        c.setFillColorRGB(0.9,0.9,0.9); c.rect(photo_x, photo_y, photo_size, photo_size, fill=1)
+        c.setFillColorRGB(0.9, 0.9, 0.9)
+        c.rect(photo_x, photo_y, photo_size, photo_size, fill=1)
     c.restoreState()
     
     # Borde foto
@@ -84,7 +96,7 @@ def draw_card(c: canvas.Canvas, person, is_employee=False):
 
     # 3. Nombre
     c.setFillColorRGB(0, 0, 0)
-    name_y = 40 * mm
+    name_y = 36 * mm
     full_name = person.full_name.upper()
     font_name = "Helvetica-Bold"
     font_size = 12
@@ -105,7 +117,7 @@ def draw_card(c: canvas.Canvas, person, is_employee=False):
 
     # 4. Datos Variables (Estudiante vs Empleado)
     c.setFont("Helvetica", 10)
-    info_y = 32 * mm
+    info_y = 30 * mm
     
     if is_employee:
         # EMPLEADO
