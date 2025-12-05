@@ -67,13 +67,17 @@
         </div>
 
         <div class="mb-4">
-            <button onclick="toggleCamera()" class="text-green-600 text-sm font-bold underline mb-2">
+            <button onclick="toggleCamera()"
+                class="text-green-600 text-sm font-bold underline mb-2 hover:text-green-800 transition">
                 <i class="fas fa-camera"></i> Mostrar/Ocultar Cámara
             </button>
-            <button onclick="openSearchModal()" class="text-blue-600 text-sm font-bold underline">
-                <i class="fas fa-search"></i> Buscar por Nombre
-            </button>
-            <div id="reader" class="w-full hidden bg-black rounded overflow-hidden" style="max-height: 300px;"></div>
+
+            <!-- Contenedor idéntico al de salidas -->
+            <div id="cameraContainer"
+                class="hidden bg-black rounded-lg overflow-hidden shadow-xl relative transition-all"
+                style="min-height: 300px;">
+                <div id="reader" class="w-full h-full"></div>
+            </div>
         </div>
 
         <!-- RESULTADO EN PANTALLA -->
@@ -179,16 +183,51 @@
         }
     });
 
+    // --- LOGICA CÁMARA MEJORADA ---
     function toggleCamera() {
-        const readerDiv = document.getElementById('reader');
-        if (readerDiv.classList.contains('hidden')) {
-            readerDiv.classList.remove('hidden');
+        const container = document.getElementById('cameraContainer');
+
+        // Si está oculto, mostrar y encender
+        if (container.classList.contains('hidden')) {
+            container.classList.remove('hidden');
+
+            // Si no está inicializado, crearlo
             if (!html5QrcodeScanner) {
-                html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                html5QrcodeScanner.render((txt) => { sendCode(txt); html5QrcodeScanner.pause(); setTimeout(() => html5QrcodeScanner.resume(), 2000); });
+                html5QrcodeScanner = new Html5QrcodeScanner(
+                    "reader",
+                    {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 }, // Tamaño de caja idéntico al de salidas
+                        aspectRatio: 1.0
+                    },
+                    /* verbose= */ false
+                );
+
+                // Renderizar (Esto pide permisos y muestra el selector de cámara)
+                html5QrcodeScanner.render(
+                    (decodedText) => {
+                        // Al detectar:
+                        sendCode(decodedText);
+
+                        // Pausar brevemente para evitar lecturas múltiples
+                        html5QrcodeScanner.pause();
+                        setTimeout(() => html5QrcodeScanner.resume(), 2000);
+                    },
+                    (errorMessage) => {
+                        // Ignorar errores de escaneo cuadro a cuadro
+                    }
+                );
             }
         } else {
-            readerDiv.classList.add('hidden');
+            // Si está visible, ocultar y APAGAR para ahorrar batería
+            container.classList.add('hidden');
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().then(() => {
+                    html5QrcodeScanner = null; // Resetear variable
+                }).catch(error => {
+                    console.error("Error al detener cámara", error);
+                });
+            }
         }
     }
 
