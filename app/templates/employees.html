@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+    <h2 class="text-2xl font-bold text-gray-800">Empleados</h2>
+
+    <!-- Buscador -->
+    <form action="/employees" method="GET" class="flex w-full md:w-auto">
+        <input type="text" name="search" value="{{ search }}" placeholder="Buscar nombre o cédula..."
+            class="w-full md:w-64 pl-4 pr-4 py-2 border rounded-l-lg focus:outline-none text-sm">
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-r-lg font-bold text-sm">Buscar</button>
+    </form>
+
+    <!-- Botones Acciones -->
+    <div class="space-x-2 flex flex-wrap justify-center gap-2">
+
+        <!-- Dropdown Actualizaciones Masivas -->
+        <div class="relative inline-block text-left group">
+            <button
+                class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-4 rounded inline-flex items-center">
+                <i class="fas fa-file-excel mr-2"></i> Actualizaciones Excel
+            </button>
+            <div class="absolute right-0 w-64 bg-white rounded-md shadow-lg hidden group-hover:block z-50 border">
+                <button onclick="openUploadModal('/employees/import-basic', 'ID, Nombre, Cargo')"
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">1. Crear
+                    Empleados</button>
+                <button onclick="openUploadModal('/employees/update-lunch-groups', 'ID, Grupos (Texto)')"
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">2. Actualizar Almuerzos
+                    (Grupos)</button>
+                <button onclick="openUploadModal('/employees/update-rfid', 'ID, Código RFID')"
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">3. Actualizar
+                    RFID</button>
+            </div>
+        </div>
+
+        <button onclick="document.getElementById('modalCreate').classList.remove('hidden')"
+            class="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-2 px-4 rounded inline-flex items-center">
+            <i class="fas fa-plus mr-2"></i> Nuevo
+        </button>
+    </div>
+</div>
+
+{% if request.query_params.get('msg') %}
+<div class="bg-green-100 text-green-700 px-4 py-2 rounded mb-4 text-sm">{{ request.query_params.get('msg') }}</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="bg-red-100 text-red-700 px-4 py-2 rounded mb-4 text-sm">{{ request.query_params.get('error') }}</div>
+{% endif %}
+
+<div class="bg-white shadow-md rounded-lg overflow-hidden flex flex-col min-h-[500px]">
+    <div class="overflow-x-auto flex-grow">
+        <table class="min-w-full leading-normal">
+            <thead>
+                <tr>
+                    <th
+                        class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">
+                        Foto</th>
+                    <th
+                        class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">
+                        Cédula</th>
+                    <th
+                        class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">
+                        Nombre</th>
+                    <th
+                        class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">
+                        Cargo</th>
+                    <th
+                        class="px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase">
+                        Almuerzo</th>
+                    <th
+                        class="px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase">
+                        RFID</th>
+                    <th
+                        class="px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase">
+                        Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in employees %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-5 py-2 border-b border-gray-200 text-sm">
+                        <div class="flex-shrink-0 w-10 h-10">
+                            {% if e.photo_path %}
+                            <img class="w-full h-full rounded-full object-cover border" src="{{ e.photo_path }}"
+                                onerror="this.src='https://ui-avatars.com/api/?name={{ e.full_name }}'">
+                            {% else %}
+                            <img class="w-full h-full rounded-full object-cover border"
+                                src="https://ui-avatars.com/api/?name={{ e.full_name }}">
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-sm font-mono">{{ e.doc_id }}</td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-sm font-bold">{{ e.full_name }}</td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-sm">{{ e.position }}</td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-center text-sm">
+                        {% if e.has_lunch %}
+                        <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-bold">{{
+                            e.lunch_type.value }}</span>
+                        {% else %}
+                        <span class="bg-gray-100 text-gray-400 text-xs px-2 py-1 rounded">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-center text-sm">
+                        {% if e.rfid_code %}
+                        <i class="fas fa-check-circle text-green-500" title="{{ e.rfid_code }}"></i>
+                        {% else %}
+                        <i class="fas fa-times-circle text-gray-300"></i>
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-center">
+                        <!-- Botón Carnet -->
+                        <a href="/cards/employee/pdf/{{ e.doc_id }}" target="_blank"
+                            class="text-blue-600 hover:text-blue-900 mx-1" title="Carnet PDF">
+                            <i class="fas fa-id-card"></i>
+                        </a>
+                        <!-- Botón Editar -->
+                        <button
+                            onclick="openEditModal('{{ e.id }}', '{{ e.doc_id }}', '{{ e.full_name }}', '{{ e.position or '' }}', '{{ 'true' if e.has_lunch else 'false' }}', '{{ e.lunch_type }}')"
+                            class="text-yellow-600 hover:text-yellow-900 mx-1">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <!-- Botón Borrar -->
+                        <a href="/employees/delete/{{ e.id }}" onclick="return confirm('¿Borrar?')"
+                            class="text-red-600 hover:text-red-900 mx-1">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Crear/Editar -->
+<div id="modalCreate" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <h3 id="modalTitle" class="text-lg font-bold mb-4">Nuevo Empleado</h3>
+        <form id="empForm" action="/employees/create" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="id" id="empId">
+
+            <label class="block text-xs font-bold text-gray-700 mb-1">Cédula</label>
+            <input class="w-full mb-3 p-2 border rounded" name="doc_id" id="docId" required>
+
+            <label class="block text-xs font-bold text-gray-700 mb-1">Nombre Completo</label>
+            <input class="w-full mb-3 p-2 border rounded" name="full_name" id="fullName" required>
+
+            <label class="block text-xs font-bold text-gray-700 mb-1">Cargo</label>
+            <input class="w-full mb-3 p-2 border rounded" name="position" id="position">
+
+            <div class="bg-gray-50 p-3 rounded mb-3 border">
+                <label class="block text-sm font-bold mb-1">Configuración Almuerzo</label>
+                <div class="flex items-center mb-2">
+                    <input type="checkbox" name="has_lunch" id="hasLunch" value="true" class="mr-2"> Autorizado
+                </div>
+                <select name="lunch_type" id="lunchType" class="w-full p-1 border rounded text-sm">
+                    <option value="Normal">Normal</option>
+                    <option value="Especial">Especial</option>
+                </select>
+            </div>
+
+            <label class="block text-sm mb-1">Foto <span id="photoHint" class="text-xs text-gray-400 hidden">(Dejar
+                    vacío para mantener actual)</span></label>
+            <input type="file" name="photo" class="w-full mb-4 text-sm">
+
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="document.getElementById('modalCreate').classList.add('hidden')"
+                    class="px-4 py-2 bg-gray-300 rounded">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Upload Universal -->
+<div id="modalUpload" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <h3 class="text-lg font-bold mb-2">Carga Masiva Excel</h3>
+        <p id="uploadHint" class="text-xs text-gray-500 mb-4 bg-yellow-50 p-2 border-l-2 border-yellow-400">Columnas
+            requeridas...</p>
+        <form id="uploadForm" method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".xlsx, .xls" class="w-full mb-4 p-2 border rounded" required>
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="document.getElementById('modalUpload').classList.add('hidden')"
+                    class="px-4 py-2 bg-gray-300 rounded">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-green-500 text-white rounded">Subir</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openUploadModal(actionUrl, hintText) {
+        document.getElementById('modalUpload').classList.remove('hidden');
+        document.getElementById('uploadForm').action = actionUrl;
+        document.getElementById('uploadHint').innerText = "Columnas requeridas: " + hintText;
+    }
+    function openCreateModal() {
+        document.getElementById('modalCreate').classList.remove('hidden');
+        document.getElementById('modalTitle').innerText = "Nuevo Empleado";
+        document.getElementById('empForm').action = "/employees/create";
+
+        // Limpiar campos
+        document.getElementById('empId').value = "";
+        document.getElementById('docId').value = "";
+        document.getElementById('docId').readOnly = false;
+        document.getElementById('fullName').value = "";
+        document.getElementById('position').value = "";
+        document.getElementById('hasLunch').checked = false;
+        document.getElementById('lunchType').value = "Normal";
+        document.getElementById('photoHint').classList.add('hidden');
+    }
+
+    function openEditModal(id, doc, name, pos, hasLunch, type) {
+        document.getElementById('modalCreate').classList.remove('hidden');
+        document.getElementById('modalTitle').innerText = "Editar Empleado";
+        document.getElementById('empForm').action = "/employees/update";
+
+        // Llenar campos
+        document.getElementById('empId').value = id;
+        document.getElementById('docId').value = doc;
+        // La cédula mejor no editarla porque es el ID único en el sistema de archivos de fotos
+        document.getElementById('docId').readOnly = true;
+        document.getElementById('docId').classList.add("bg-gray-100");
+
+        document.getElementById('fullName').value = name;
+        document.getElementById('position').value = pos;
+
+        // Boolean check
+        document.getElementById('hasLunch').checked = (hasLunch === 'true');
+
+        // Select value (Manejar el caso de 'Ninguno' que no está en el select, defaults to Normal)
+        if (type === 'Ninguno') type = 'Normal';
+        document.getElementById('lunchType').value = type;
+
+        document.getElementById('photoHint').classList.remove('hidden');
+    }
+</script>
+{% endblock %}

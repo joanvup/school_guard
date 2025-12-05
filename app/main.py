@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from .database import engine
-from .routers import auth, dashboard, students, cards, scan, doors, reports, users
+from .routers import auth, dashboard, students, cards, scan, doors, reports, users, employees, lunch
 from . import models, deps
 
 models.Base.metadata.create_all(bind=engine)
@@ -33,6 +33,8 @@ app.include_router(scan.router)
 app.include_router(doors.router)
 app.include_router(reports.router)
 app.include_router(users.router)
+app.include_router(employees.router) 
+app.include_router(lunch.router)
 
 @app.get("/")
 def root(request: Request):

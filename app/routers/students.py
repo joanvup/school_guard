@@ -237,3 +237,66 @@ async def import_photos_zip(file: UploadFile = File(...), db: Session = Depends(
     except Exception as e:
         print(f"Error ZIP: {e}")
         return RedirectResponse(url="/students?error=Error+al+procesar+ZIP", status_code=303)
+
+# --- ACTUALIZACIONES ESPECÍFICAS (ALMUERZOS / RFID) ---
+
+@router.post("/update-lunch-groups")
+async def update_lunch_groups_students(file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+    """
+    Excel: Col 0 -> Student ID, Col 1 -> Grupos (Texto)
+    Busca 'ALMUERZO NORMAL' o 'ALMUERZO ESPECIAL'
+    """
+    print("mola")
+    if not file.filename.endswith(('.xls', '.xlsx')): 
+        return RedirectResponse("/students?error=Formato+invalido", 303)
+    try:
+        content = await file.read()
+        df = pd.read_excel(io.BytesIO(content))
+        updated = 0
+        
+        for _, row in df.iterrows():
+            sid = str(row[0]).strip()
+            # Asegurar que grupos no sea NaN
+            raw_groups = str(row[1]).upper() if pd.notna(row[1]) else ""
+            
+            student = db.query(models.Student).filter(models.Student.student_id == sid).first()
+            if student:
+                # Logica de asignación estricta según requerimiento
+                if "ALMUERZO NORMAL" in raw_groups:
+                    student.has_lunch = True
+                    student.lunch_type = models.LunchType.NORMAL
+                elif "ALMUERZO ESPECIAL" in raw_groups:
+                    student.has_lunch = True
+                    student.lunch_type = models.LunchType.ESPECIAL
+                else:
+                    # Si no está en el texto, se quita el permiso
+                    student.has_lunch = False
+                    student.lunch_type = models.LunchType.NONE
+                updated += 1
+        
+        db.commit()
+        return RedirectResponse(f"/students?msg=Almuerzos+actualizados:+{updated}", 303)
+    except Exception as e:
+        print(e)
+        return RedirectResponse("/students?error=Error+procesando+archivo", 303)
+
+@router.post("/update-rfid")
+async def update_rfid_students(file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+    """Excel: Col 0 -> Student ID, Col 1 -> RFID Code"""
+    if not file.filename.endswith(('.xls', '.xlsx')): 
+        return RedirectResponse("/students?error=Formato+invalido", 303)
+    try:
+        df = pd.read_excel(io.BytesIO(await file.read()))
+        updated = 0
+        for _, row in df.iterrows():
+            sid = str(row[0]).strip()
+            rfid = str(row[1]).strip()
+            if rfid.endswith('.0'): rfid = rfid[:-2]
+
+            student = db.query(models.Student).filter(models.Student.student_id == sid).first()
+            if student:
+                student.rfid_code = rfid
+                updated += 1
+        db.commit()
+        return RedirectResponse(f"/students?msg=RFIDs+actualizados:+{updated}", 303)
+    except Exception: return RedirectResponse("/students?error=Error+archivo", 303)

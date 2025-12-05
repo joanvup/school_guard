@@ -38,3 +38,15 @@ def require_admin(user: models.User = Depends(require_user)):
             detail="No tiene permisos de administrador"
         )
     return user
+
+# Nuevo: Permiso para ver cosas de Almuerzos (Admin + Operador Almuerzo)
+def require_lunch_access(user: models.User = Depends(require_user)):
+    if user.role not in [models.UserRole.ADMIN, models.UserRole.LUNCH_OP]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requiere acceso a Comedor")
+    return user
+
+# Nuevo: Permiso para ver cosas de Salidas (Admin + Operador Salida)
+def require_exit_access(user: models.User = Depends(require_user)):
+    if user.role not in [models.UserRole.ADMIN, models.UserRole.OPERATOR]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requiere acceso a Portería")
+    return user

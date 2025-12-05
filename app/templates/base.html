@@ -39,29 +39,50 @@
             </div>
 
             <nav id="menu" class="hidden md:block px-2 pb-4 md:pb-0">
-                <div class="mt-4 mb-2 text-xs text-gray-400 uppercase px-2">Menu</div>
+                <div class="mt-4 mb-2 text-xs text-gray-400 uppercase px-2">Menu Principal</div>
 
-                <!-- ACCESIBLE PARA TODOS -->
                 <a href="/dashboard"
                     class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path == '/dashboard' else '' }}">
                     <i class="fas fa-home w-6"></i> Dashboard
                 </a>
+
+                <!-- MÓDULO SALIDAS (Portería) -->
+                {% if user.role in ['administrador', 'operador'] %}
+                <div class="mt-4 mb-2 text-xs text-gray-400 uppercase px-2 text-blue-300">Portería</div>
                 <a href="/scan"
                     class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/scan') else '' }}">
-                    <i class="fas fa-qrcode w-6"></i> Escáner
+                    <i class="fas fa-walking w-6"></i> Salida Peatonal
                 </a>
                 <a href="/reports"
                     class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/reports') else '' }}">
-                    <i class="fas fa-chart-bar w-6"></i> Reportes
+                    <i class="fas fa-clipboard-list w-6"></i> Reportes Salida
                 </a>
+                {% endif %}
 
-                <!-- SOLO ADMINISTRADORES -->
+                <!-- MÓDULO ALMUERZOS (Comedor) -->
+                {% if user.role in ['administrador', 'operador_almuerzo'] %}
+                <div class="mt-4 mb-2 text-xs text-gray-400 uppercase px-2 text-green-300">Comedor</div>
+                <a href="/lunch/scan"
+                    class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/lunch/scan') else '' }}">
+                    <i class="fas fa-utensils w-6"></i> Entrega Almuerzo
+                </a>
+                <a href="/lunch/reports"
+                    class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/lunch/reports') else '' }}">
+                    <i class="fas fa-file-invoice w-6"></i> Reportes Almuerzo
+                </a>
+                {% endif %}
+
+                <!-- ADMINISTRACIÓN -->
                 {% if user.role == "administrador" %}
-                <div class="mt-4 mb-2 text-xs text-gray-400 uppercase px-2">Administración</div>
+                <div class="mt-4 mb-2 text-xs text-gray-400 uppercase px-2 text-purple-300">Administración</div>
 
                 <a href="/students"
                     class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/students') else '' }}">
                     <i class="fas fa-user-graduate w-6"></i> Estudiantes
+                </a>
+                <a href="/employees"
+                    class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/employees') else '' }}">
+                    <i class="fas fa-user-tie w-6"></i> Empleados
                 </a>
                 <a href="/doors"
                     class="block px-4 py-2 rounded nav-link mb-1 {{ 'bg-blue-600' if request.url.path.startswith('/doors') else '' }}">

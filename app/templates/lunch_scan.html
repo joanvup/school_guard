@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- ESTILOS DE IMPRESIÓN (TICKET) -->
+<style>
+    /* Por defecto el ticket está oculto en la pantalla del PC/Móvil */
+    #printable-ticket {
+        display: none;
+    }
+
+    @media print {
+
+        /* Ocultar todo lo que no sea el ticket */
+        body * {
+            visibility: hidden;
+        }
+
+        #printable-ticket,
+        #printable-ticket * {
+            visibility: visible;
+        }
+
+        /* Posicionar el ticket en la esquina superior izquierda */
+        #printable-ticket {
+            position: absolute;
+            left: 0;
+            top: 0;
+            display: block !important;
+            width: 72mm;
+            /* Un poco menos de 75 para margen */
+            height: 72mm;
+            padding: 2mm;
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
+            /* Fuente tipo ticket */
+            color: black;
+            background: white;
+        }
+
+        /* Configuración de página para impresora térmica */
+        @page {
+            size: 75mm 75mm;
+            margin: 0;
+        }
+    }
+</style>
+
+<div class="max-w-2xl mx-auto no-print"> <!-- Clase no-print para lógica JS si se requiriera -->
+
+    <div class="bg-green-600 text-white p-4 rounded-t-lg shadow-lg flex justify-between items-center">
+        <div>
+            <h2 class="text-2xl font-bold"><i class="fas fa-utensils mr-2"></i> Control de Almuerzos</h2>
+            <p class="text-green-100 text-sm">Escanee QR o acerque Tarjeta RFID</p>
+        </div>
+        <div id="inputStatus" class="bg-green-700 px-3 py-1 rounded text-xs font-mono">
+            <i class="fas fa-keyboard"></i> Lector Listo
+        </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-b-lg shadow-lg border-x border-b">
+
+        <div class="mb-4 relative">
+            <input type="text" id="rfidInput"
+                class="w-full border-2 border-gray-300 rounded p-3 text-lg focus:border-green-500 focus:ring-green-200 focus:outline-none"
+                placeholder="Clic aquí y pase la tarjeta..." autocomplete="off">
+            <div class="absolute right-3 top-4 text-gray-400"><i class="fas fa-wifi"></i></div>
+        </div>
+
+        <div class="mb-4">
+            <button onclick="toggleCamera()" class="text-green-600 text-sm font-bold underline mb-2">
+                <i class="fas fa-camera"></i> Mostrar/Ocultar Cámara
+            </button>
+            <button onclick="openSearchModal()" class="text-blue-600 text-sm font-bold underline">
+                <i class="fas fa-search"></i> Buscar por Nombre
+            </button>
+            <div id="reader" class="w-full hidden bg-black rounded overflow-hidden" style="max-height: 300px;"></div>
+        </div>
+
+        <!-- RESULTADO EN PANTALLA -->
+        <div id="resultCard" class="hidden">
+            <div id="resultBg" class="border-4 rounded-lg p-6 text-center">
+                <div class="flex flex-col items-center">
+                    <img id="resPhoto" src=""
+                        class="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg mb-4">
+                    <h2 id="resName" class="text-2xl font-bold text-gray-800 leading-tight"></h2>
+                    <p id="resExtra" class="text-gray-500 font-bold text-lg mb-1"></p>
+                    <span id="resPersonType"
+                        class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-xs uppercase font-bold"></span>
+                </div>
+                <div id="resLunchBox" class="mt-6 p-4 rounded-lg text-white">
+                    <p class="text-sm uppercase opacity-90 font-bold">Tipo de Menú</p>
+                    <h1 id="resLunchType" class="text-5xl font-extrabold tracking-wider">NORMAL</h1>
+                </div>
+                <div id="resMsg" class="mt-4 font-bold text-lg text-gray-700"></div>
+                <!-- Botón de reimprimir manual -->
+                <button id="btnPrint" onclick="window.print()"
+                    class="mt-4 text-sm text-gray-500 underline hidden">Reimprimir Ticket</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ESTRUCTURA DEL TICKET (Oculto hasta imprimir) -->
+<div id="printable-ticket">
+    <div style="font-size: 10px; font-weight: bold; margin-bottom: 5px;">COLEGIO BILINGÜE</div>
+    <div style="font-size: 8px; margin-bottom: 5px;">CONTROL DE ALIMENTACIÓN</div>
+    <hr style="border-top: 1px dashed #000; margin: 5px 0;">
+
+    <div id="ticket-type" style="font-size: 16px; font-weight: 900; margin: 8px 0;">NORMAL</div>
+
+    <div id="ticket-name"
+        style="font-size: 10px; font-weight: bold; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+        NOMBRE ESTUDIANTE</div>
+    <div id="ticket-extra" style="font-size: 9px;">CURSO 11A</div>
+
+    <div style="font-size: 8px; margin-top: 5px;">
+        <span id="ticket-date">2025-10-24</span> - <span id="ticket-time">12:30 PM</span>
+    </div>
+
+    <!-- Contenedor QR -->
+    <div id="ticket-qr" style="display: flex; justify-content: center; margin-top: 5px;"></div>
+</div>
+<!-- MODAL BÚSQUEDA MANUAL -->
+<div id="modalSearch" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="bg-blue-600 px-4 py-3 border-b flex justify-between items-center">
+            <h3 class="text-lg font-bold text-white"><i class="fas fa-search mr-2"></i> Buscar Persona</h3>
+            <button onclick="closeSearchModal()" class="text-blue-100 hover:text-white text-2xl">&times;</button>
+        </div>
+
+        <div class="p-4">
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="searchInput" placeholder="Escriba nombre (min 3 letras)..."
+                    class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-300 outline-none"
+                    onkeydown="if(event.key === 'Enter') executeSearch()">
+                <button onclick="executeSearch()"
+                    class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+
+            <!-- Lista Resultados -->
+            <div id="searchResults" class="space-y-2 max-h-60 overflow-y-auto">
+                <p class="text-gray-400 text-center text-sm mt-2">Los resultados aparecerán aquí...</p>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Sonidos y Librerías -->
+<audio id="audio-success" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="audio-error" src="https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg"></audio>
+
+<script src="/static/js/html5-qrcode.min.js"></script>
+<!-- Librería para GENERAR el QR del ticket -->
+<script src="/static/js/qrcode.min.js"></script>
+
+<script>
+    const rfidInput = document.getElementById('rfidInput');
+    const inputStatus = document.getElementById('inputStatus');
+    let isProcessing = false;
+    let html5QrcodeScanner = null;
+
+    rfidInput.focus();
+    document.addEventListener('click', () => rfidInput.focus());
+    rfidInput.addEventListener('blur', () => {
+        inputStatus.className = "bg-yellow-500 px-3 py-1 rounded text-xs font-mono text-white";
+        inputStatus.innerHTML = "Lector Desconectado";
+    });
+    rfidInput.addEventListener('focus', () => {
+        inputStatus.className = "bg-green-700 px-3 py-1 rounded text-xs font-mono text-white";
+        inputStatus.innerHTML = "Lector Listo";
+    });
+
+    rfidInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            const code = rfidInput.value;
+            rfidInput.value = '';
+            if (code.trim().length > 0) sendCode(code);
+        }
+    });
+
+    function toggleCamera() {
+        const readerDiv = document.getElementById('reader');
+        if (readerDiv.classList.contains('hidden')) {
+            readerDiv.classList.remove('hidden');
+            if (!html5QrcodeScanner) {
+                html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                html5QrcodeScanner.render((txt) => { sendCode(txt); html5QrcodeScanner.pause(); setTimeout(() => html5QrcodeScanner.resume(), 2000); });
+            }
+        } else {
+            readerDiv.classList.add('hidden');
+        }
+    }
+
+    async function sendCode(code) {
+        if (isProcessing) return;
+        isProcessing = true;
+        try {
+            const response = await fetch('/lunch/process', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code })
+            });
+            const data = await response.json();
+            showResult(data);
+        } catch (e) { console.error(e); }
+        isProcessing = false;
+    }
+
+    function showResult(data) {
+        document.getElementById('resultCard').classList.remove('hidden');
+        document.getElementById('btnPrint').classList.add('hidden');
+
+        // Llenar UI Pantalla
+        if (data.person) {
+            document.getElementById('resName').innerText = data.person.name;
+            document.getElementById('resExtra').innerText = data.person.extra;
+            document.getElementById('resPersonType').innerText = data.person.type;
+            let photo = data.person.photo ? data.person.photo : `https://ui-avatars.com/api/?name=${data.person.name}`;
+            document.getElementById('resPhoto').src = photo;
+        }
+
+        const bg = document.getElementById('resultBg');
+        const box = document.getElementById('resLunchBox');
+        document.getElementById('resMsg').innerText = data.message;
+        document.getElementById('resLunchType').innerText = data.lunch_type || "--";
+
+        if (data.status === 'success') {
+            const color = (data.lunch_type === 'Especial') ? 'purple' : 'green';
+            bg.className = `border-4 border-${color}-500 bg-${color}-50 rounded-lg p-6 text-center`;
+            box.className = `mt-6 p-4 rounded-lg text-white bg-${color}-600 shadow-lg`;
+            try { document.getElementById('audio-success').play(); } catch (e) { }
+
+            // PREPARAR E IMPRIMIR TICKET
+            if (data.ticket_data) {
+                prepareTicket(data.ticket_data);
+                document.getElementById('btnPrint').classList.remove('hidden');
+                // Retraso pequeño para asegurar que el QR se generó
+                setTimeout(() => window.print(), 500);
+            }
+
+        } else if (data.status === 'warning') {
+            bg.className = "border-4 border-orange-500 bg-orange-50 rounded-lg p-6 text-center";
+            box.className = "mt-6 p-4 rounded-lg text-white bg-orange-500 shadow-lg";
+            try { document.getElementById('audio-error').play(); } catch (e) { }
+        } else {
+            bg.className = "border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center";
+            box.className = "mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg";
+            try { document.getElementById('audio-error').play(); } catch (e) { }
+        }
+    }
+
+    function prepareTicket(data) {
+        // 1. Llenar textos
+        document.getElementById('ticket-name').innerText = data.name;
+        document.getElementById('ticket-type').innerText = data.type; // NORMAL / ESPECIAL
+        document.getElementById('ticket-extra').innerText = data.extra;
+        document.getElementById('ticket-date').innerText = data.date;
+        document.getElementById('ticket-time').innerText = data.time;
+
+        // 2. Generar QR
+        const qrContainer = document.getElementById('ticket-qr');
+        qrContainer.innerHTML = ""; // Limpiar anterior
+
+        // Data del QR: JSON compactado
+        const qrText = `${data.name}|${data.type}|${data.date} ${data.time}`;
+
+        new QRCode(qrContainer, {
+            text: qrText,
+            width: 80,  // Tamaño pequeño para ticket
+            height: 80,
+            correctLevel: QRCode.CorrectLevel.L
+        });
+    }
+    // --- LÓGICA BÚSQUEDA MANUAL ---
+    const modalSearch = document.getElementById('modalSearch');
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+
+    function openSearchModal() {
+        modalSearch.classList.remove('hidden');
+        searchInput.value = "";
+        searchResults.innerHTML = '<p class="text-gray-400 text-center text-sm mt-2">Escriba nombre para buscar...</p>';
+        setTimeout(() => searchInput.focus(), 100);
+    }
+
+    function closeSearchModal() {
+        modalSearch.classList.add('hidden');
+        rfidInput.focus(); // Devolver foco al lector
+    }
+
+    async function executeSearch() {
+        const q = searchInput.value.trim();
+        if (q.length < 3) {
+            searchResults.innerHTML = '<p class="text-red-500 text-center text-sm">Escriba al menos 3 letras</p>';
+            return;
+        }
+
+        searchResults.innerHTML = '<div class="text-center py-2"><i class="fas fa-circle-notch fa-spin text-blue-500"></i> Buscando...</div>';
+
+        try {
+            const res = await fetch(`/lunch/search_person?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+
+            if (data.length === 0) {
+                searchResults.innerHTML = '<p class="text-gray-500 text-center text-sm">No se encontraron coincidencias.</p>';
+                return;
+            }
+
+            let html = '';
+            data.forEach(p => {
+                let photo = p.photo ? p.photo : `https://ui-avatars.com/api/?name=${p.name}`;
+
+                // Al hacer clic, llamamos a sendCode con el código (ID) de la persona
+                html += `
+                <div onclick="selectManualPerson('${p.code}')" class="flex items-center p-2 border rounded hover:bg-blue-50 cursor-pointer transition">
+                    <img src="${photo}" class="w-10 h-10 rounded-full object-cover border mr-3">
+                    <div class="flex-1">
+                        <p class="text-sm font-bold text-gray-800">${p.name}</p>
+                        <p class="text-xs text-gray-500">${p.type} - ${p.extra}</p>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </div>`;
+            });
+            searchResults.innerHTML = html;
+
+        } catch (e) {
+            console.error(e);
+            searchResults.innerHTML = '<p class="text-red-500 text-center text-sm">Error en la búsqueda</p>';
+        }
+    }
+
+    function selectManualPerson(code) {
+        closeSearchModal();
+        // Enviamos el código (ID o Cédula) al sistema principal como si fuera escrito manual
+        sendCode(code);
+    }
+</script>
+{% endblock %}

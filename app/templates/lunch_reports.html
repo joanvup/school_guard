@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800"><i class="fas fa-file-invoice mr-2"></i> Reporte Almuerzos</h2>
+</div>
+
+<!-- Filtros -->
+<div class="bg-white p-4 rounded shadow mb-6 border-l-4 border-green-500">
+    <form method="GET" action="/lunch/reports" class="flex flex-wrap items-end gap-4">
+        <div>
+            <label class="block text-xs font-bold text-gray-500">Desde</label>
+            <input type="date" name="date_start" value="{{ filters.date_start }}" class="border rounded p-2 text-sm">
+        </div>
+        <div>
+            <label class="block text-xs font-bold text-gray-500">Hasta</label>
+            <input type="date" name="date_end" value="{{ filters.date_end }}" class="border rounded p-2 text-sm">
+        </div>
+        <div>
+            <label class="block text-xs font-bold text-gray-500">Menú</label>
+            <select name="lunch_type" class="border rounded p-2 text-sm bg-white w-32">
+                <option value="Todos">Todos</option>
+                <option value="Normal" {% if filters.lunch_type == 'Normal' %}selected{% endif %}>Normal</option>
+                <option value="Especial" {% if filters.lunch_type == 'Especial' %}selected{% endif %}>Especial</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-bold text-gray-500">Persona</label>
+            <select name="person_type" class="border rounded p-2 text-sm bg-white w-32">
+                <option value="">Todos</option>
+                <option value="student" {% if filters.person_type == 'student' %}selected{% endif %}>Estudiantes</option>
+                <option value="employee" {% if filters.person_type == 'employee' %}selected{% endif %}>Empleados</option>
+            </select>
+        </div>
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold">Filtrar</button>
+        
+        <a href="/lunch/reports/export?date_start={{ filters.date_start }}&date_end={{ filters.date_end }}&lunch_type={{ filters.lunch_type or '' }}&person_type={{ filters.person_type or '' }}" 
+           class="ml-auto bg-green-600 text-white px-4 py-2 rounded text-sm font-bold shadow hover:bg-green-700">
+            <i class="fas fa-file-excel mr-2"></i> Exportar
+        </a>
+    </form>
+</div>
+
+<!-- KPIs -->
+<div class="grid grid-cols-3 gap-4 mb-6">
+    <div class="bg-white p-4 rounded shadow text-center">
+        <p class="text-xs text-gray-500 uppercase">Total Entregas</p>
+        <p class="text-2xl font-bold text-gray-800">{{ stats.total }}</p>
+    </div>
+    <div class="bg-green-50 p-4 rounded shadow text-center border border-green-200">
+        <p class="text-xs text-green-700 uppercase">Menú Normal</p>
+        <p class="text-2xl font-bold text-green-700">{{ stats.normal }}</p>
+    </div>
+    <div class="bg-purple-50 p-4 rounded shadow text-center border border-purple-200">
+        <p class="text-xs text-purple-700 uppercase">Menú Especial</p>
+        <p class="text-2xl font-bold text-purple-700">{{ stats.special }}</p>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="bg-white shadow-md rounded-lg overflow-hidden">
+    <table class="min-w-full leading-normal" id="lunchTable">
+        <thead>
+            <tr>
+                <th onclick="sortTable(0)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                    Fecha/Hora <i class="fas fa-sort ml-1 text-gray-400"></i>
+                </th>
+                <th onclick="sortTable(1)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                    Persona <i class="fas fa-sort ml-1 text-gray-400"></i>
+                </th>
+                <th onclick="sortTable(2)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                    Tipo <i class="fas fa-sort ml-1 text-gray-400"></i>
+                </th>
+                <th onclick="sortTable(3)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                    Curso/Cargo <i class="fas fa-sort ml-1 text-gray-400"></i>
+                </th>
+                <th onclick="sortTable(4)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase select-none">
+                    Menú <i class="fas fa-sort ml-1 text-gray-400"></i>
+                </th>
+                <th onclick="sortTable(5)" class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase select-none">
+                    Operador <i class="fas fa-sort ml-1 text-gray-400"></i>
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr class="hover:bg-gray-50">
+                <!-- Usamos data-value con ISO format para ordenar correctamente por fecha completa -->
+                <td data-value="{{ log.timestamp.isoformat() }}" class="px-5 py-2 border-b border-gray-200 text-sm font-mono text-gray-600">
+                    {{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}
+                </td>
+                <td class="px-5 py-2 border-b border-gray-200 text-sm font-bold text-gray-800">
+                    {% if log.student %} {{ log.student.full_name }}
+                    {% elif log.employee %} {{ log.employee.full_name }}
+                    {% else %} ? {% endif %}
+                </td>
+                <td class="px-5 py-2 border-b border-gray-200 text-xs text-gray-500 uppercase">
+                    {% if log.student %} Estudiante {% else %} Empleado {% endif %}
+                </td>
+                <td class="px-5 py-2 border-b border-gray-200 text-sm text-gray-600">
+                    {% if log.student %} {{ log.student.course }}
+                    {% elif log.employee %} {{ log.employee.position }} {% endif %}
+                </td>
+                <td class="px-5 py-2 border-b border-gray-200 text-center">
+                    <span class="px-2 py-1 rounded text-xs font-bold text-white {{ 'bg-green-500' if log.delivered_type == 'Normal' else 'bg-purple-500' }}">
+                        {{ log.delivered_type }}
+                    </span>
+                </td>
+                <td class="px-5 py-2 border-b border-gray-200 text-center text-xs text-gray-400">
+                    {{ log.operator.username }}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="p-4 text-center text-gray-500">Sin registros</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    function sortTable(n) {
+        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById("lunchTable");
+        switching = true;
+        dir = "asc"; 
+        
+        // Reset iconos
+        const headers = table.getElementsByTagName("th");
+        for (let h of headers) {
+            let icon = h.querySelector('i');
+            if(icon) icon.className = "fas fa-sort ml-1 text-gray-400";
+        }
+        
+        while (switching) {
+            switching = false;
+            rows = table.rows;
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                
+                let xVal = x.getAttribute("data-value") || x.innerText.toLowerCase();
+                let yVal = y.getAttribute("data-value") || y.innerText.toLowerCase();
+
+                if (dir == "asc") {
+                    if (xVal > yVal) { shouldSwitch = true; break; }
+                } else if (dir == "desc") {
+                    if (xVal < yVal) { shouldSwitch = true; break; }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount ++;      
+            } else {
+                if (switchcount == 0 && dir == "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+        let activeIcon = headers[n].querySelector('i');
+        if(activeIcon) activeIcon.className = dir === 'asc' ? "fas fa-sort-up ml-1 text-gray-800" : "fas fa-sort-down ml-1 text-gray-800";
+    }
+</script>
+{% endblock %}
