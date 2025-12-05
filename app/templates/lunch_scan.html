@@ -251,41 +251,66 @@
         document.getElementById('resultCard').classList.remove('hidden');
         document.getElementById('btnPrint').classList.add('hidden');
 
-        // Llenar UI Pantalla
+        // 1. LIMPIEZA INICIAL (Para borrar datos anteriores)
+        document.getElementById('resName').innerText = "---";
+        document.getElementById('resExtra').innerText = "";
+        document.getElementById('resPersonType').innerText = "";
+        document.getElementById('resLunchType').innerText = "--";
+
+        // Imagen por defecto (transparente o placeholder)
+        document.getElementById('resPhoto').src = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+
+        // 2. LLENAR DATOS (Si existen)
         if (data.person) {
             document.getElementById('resName').innerText = data.person.name;
             document.getElementById('resExtra').innerText = data.person.extra;
             document.getElementById('resPersonType').innerText = data.person.type;
+
             let photo = data.person.photo ? data.person.photo : `https://ui-avatars.com/api/?name=${data.person.name}`;
             document.getElementById('resPhoto').src = photo;
+        } else {
+            // SI NO SE ENCUENTRA (ID Errado)
+            document.getElementById('resName').innerText = "NO ENCONTRADO";
+            document.getElementById('resPhoto').src = "https://ui-avatars.com/api/?name=X&background=fee2e2&color=ef4444"; // Avatar Rojo 'X'
         }
 
+        // 3. ESTILOS SEGÚN ESTADO
         const bg = document.getElementById('resultBg');
         const box = document.getElementById('resLunchBox');
+        const lunchTitle = document.getElementById('resLunchType');
+
         document.getElementById('resMsg').innerText = data.message;
-        document.getElementById('resLunchType').innerText = data.lunch_type || "--";
 
         if (data.status === 'success') {
+            // ÉXITO
+            lunchTitle.innerText = data.lunch_type;
             const color = (data.lunch_type === 'Especial') ? 'purple' : 'green';
-            bg.className = `border-4 border-${color}-500 bg-${color}-50 rounded-lg p-6 text-center`;
-            box.className = `mt-6 p-4 rounded-lg text-white bg-${color}-600 shadow-lg`;
+
+            bg.className = `border-4 border-${color}-500 bg-${color}-50 rounded-lg p-6 text-center transition-colors`;
+            box.className = `mt-6 p-4 rounded-lg text-white bg-${color}-600 shadow-lg transition-colors`;
+
             try { document.getElementById('audio-success').play(); } catch (e) { }
 
-            // PREPARAR E IMPRIMIR TICKET
             if (data.ticket_data) {
                 prepareTicket(data.ticket_data);
                 document.getElementById('btnPrint').classList.remove('hidden');
-                // Retraso pequeño para asegurar que el QR se generó
                 setTimeout(() => window.print(), 500);
             }
 
         } else if (data.status === 'warning') {
-            bg.className = "border-4 border-orange-500 bg-orange-50 rounded-lg p-6 text-center";
-            box.className = "mt-6 p-4 rounded-lg text-white bg-orange-500 shadow-lg";
+            // YA COMIÓ (ADVERTENCIA)
+            lunchTitle.innerText = data.lunch_type || "NORMAL";
+            bg.className = "border-4 border-orange-500 bg-orange-50 rounded-lg p-6 text-center transition-colors";
+            box.className = "mt-6 p-4 rounded-lg text-white bg-orange-500 shadow-lg transition-colors";
+
             try { document.getElementById('audio-error').play(); } catch (e) { }
+
         } else {
-            bg.className = "border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center";
-            box.className = "mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg";
+            // ERROR / DENEGADO / NO ENCONTRADO
+            lunchTitle.innerText = "ERROR";
+            bg.className = "border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center transition-colors";
+            box.className = "mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg transition-colors";
+
             try { document.getElementById('audio-error').play(); } catch (e) { }
         }
     }
