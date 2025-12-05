@@ -121,8 +121,8 @@ def draw_card(c: canvas.Canvas, person, is_employee=False):
     
     if is_employee:
         # EMPLEADO
-        if person.position:
-            c.drawCentredString(CARD_WIDTH/2, info_y + 4*mm, person.position.upper())
+        #if person.position:
+        #    c.drawCentredString(CARD_WIDTH/2, info_y + 4*mm, person.position.upper())
         c.setFont("Helvetica", 9)
         c.drawCentredString(CARD_WIDTH/2, info_y, f"C.C.: {person.doc_id}")
         qr_data = person.doc_id
