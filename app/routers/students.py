@@ -122,14 +122,29 @@ async def create_student(
 @router.get("/delete/{id}")
 def delete_student(id: int, db: Session = Depends(database.get_db)):
     student = db.query(models.Student).filter(models.Student.id == id).first()
-    if student:
-        # Opcional: Borrar foto del disco si se desea
-        # if student.photo_path:
-        #     try: os.remove(f"app{student.photo_path}")
-        #     except: pass
-        db.delete(student)
-        db.commit()
-    return RedirectResponse(url="/students", status_code=303)
+    if not student:
+        return RedirectResponse(url="/students?error=Estudiante+no+encontrado", status_code=303)
+
+    # 1. Verificar Historial de Almuerzos
+    lunch_count = db.query(models.LunchLog).filter(models.LunchLog.student_id == id).count()
+    if lunch_count > 0:
+        return RedirectResponse(
+            url="/students?error=Error:+El+estudiante+tiene+historial+de+almuerzos.", 
+            status_code=303
+        )
+
+    # 2. Verificar Historial de Salidas
+    exit_count = db.query(models.ExitLog).filter(models.ExitLog.student_id == id).count()
+    if exit_count > 0:
+        return RedirectResponse(
+            url="/students?error=Error:+El+estudiante+tiene+historial+de+salidas.", 
+            status_code=303
+        )
+
+    # Si está limpio, borrar
+    db.delete(student)
+    db.commit()
+    return RedirectResponse(url="/students?msg=Estudiante+eliminado", status_code=303)
 
 @router.get("/toggle_auth/{id}")
 def toggle_auth(id: int, db: Session = Depends(database.get_db)):

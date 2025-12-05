@@ -103,10 +103,24 @@ def create_employee(
 @router.get("/delete/{id}")
 def delete_employee(id: int, db: Session = Depends(database.get_db)):
     emp = db.query(models.Employee).filter(models.Employee.id == id).first()
-    if emp:
-        db.delete(emp)
-        db.commit()
-    return RedirectResponse(url="/employees", status_code=303)
+    if not emp:
+        return RedirectResponse(url="/employees?error=Empleado+no+encontrado", status_code=303)
+
+    # VERIFICACIÓN DE INTEGRIDAD
+    # Contamos si tiene registros de almuerzo asociados
+    has_records = db.query(models.LunchLog).filter(models.LunchLog.employee_id == id).count()
+    
+    if has_records > 0:
+        return RedirectResponse(
+            url="/employees?error=No+se+puede+eliminar:+El+empleado+tiene+historial+de+almuerzos.", 
+            status_code=303
+        )
+        
+    # Si no tiene registros, procedemos a borrar
+    db.delete(emp)
+    db.commit()
+    
+    return RedirectResponse(url="/employees?msg=Empleado+eliminado", status_code=303)
 
 # --- IMPORTACIONES ---
 
