@@ -94,7 +94,7 @@
                 <!-- Usamos data-value con ISO format para ordenar correctamente por fecha completa -->
                 <td data-value="{{ log.timestamp.isoformat() }}"
                     class="px-5 py-2 border-b border-gray-200 text-sm font-mono text-gray-600">
-                    {{ log.timestamp.strftime('%Y-%m-%d %I:%M:%S %p') }}
+                    {{ log.timestamp.strftime('%Y-%m-%d %I:%M %p') }}
                 </td>
                 <td class="px-5 py-2 border-b border-gray-200 text-sm font-bold text-gray-800">
                     {% if log.student %} {{ log.student.full_name }}
