@@ -164,30 +164,15 @@
 <script>
     const rfidInput = document.getElementById('rfidInput');
     const inputStatus = document.getElementById('inputStatus');
-
-    // Variables de Estado
     let isProcessing = false;
-    let isPrinting = false; // Control de impresión
     let html5QrcodeScanner = null;
 
-    // --- 1. LÓGICA RFID Y FOCO ---
     rfidInput.focus();
-
-    // Re-enfocar solo si no estamos imprimiendo ni usando botones
-    document.addEventListener('click', (e) => {
-        // Ignorar clics dentro de modales o botones
-        if (!isPrinting && !e.target.closest('button') && !e.target.closest('.bg-white.rounded-lg')) {
-            rfidInput.focus();
-        }
-    });
-
+    document.addEventListener('click', () => rfidInput.focus());
     rfidInput.addEventListener('blur', () => {
-        if (!isPrinting && document.getElementById('modalSearch').classList.contains('hidden')) {
-            inputStatus.className = "bg-yellow-500 px-3 py-1 rounded text-xs font-mono text-white";
-            inputStatus.innerHTML = "Lector Desconectado";
-        }
+        inputStatus.className = "bg-yellow-500 px-3 py-1 rounded text-xs font-mono text-white";
+        inputStatus.innerHTML = "Lector Desconectado";
     });
-
     rfidInput.addEventListener('focus', () => {
         inputStatus.className = "bg-green-700 px-3 py-1 rounded text-xs font-mono text-white";
         inputStatus.innerHTML = "Lector Listo";
@@ -201,91 +186,56 @@
         }
     });
 
-    // --- 2. LÓGICA CÁMARA (Restaurada) ---
+    // --- LOGICA CÁMARA MEJORADA ---
     function toggleCamera() {
-        const readerDiv = document.getElementById('reader'); // Usar ID simple si no cambiaste el HTML
-        // Si usaste 'cameraContainer' en la versión anterior, ajusta el ID aquí.
-        // Asumimos el ID original 'reader' o su contenedor padre si lo cambiaste.
+        const container = document.getElementById('cameraContainer');
 
-        // Versión compatible con estructura original:
-        if (readerDiv.classList.contains('hidden')) {
-            readerDiv.classList.remove('hidden');
+        // Si está oculto, mostrar y encender
+        if (container.classList.contains('hidden')) {
+            container.classList.remove('hidden');
+
+            // Si no está inicializado, crearlo
             if (!html5QrcodeScanner) {
-                html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                html5QrcodeScanner.render((txt) => {
-                    sendCode(txt);
-                    html5QrcodeScanner.pause();
-                    setTimeout(() => html5QrcodeScanner.resume(), 2000);
-                });
+                html5QrcodeScanner = new Html5QrcodeScanner(
+                    "reader",
+                    {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 }, // Tamaño de caja idéntico al de salidas
+                        aspectRatio: 1.0
+                    },
+                    /* verbose= */ false
+                );
+
+                // Renderizar (Esto pide permisos y muestra el selector de cámara)
+                html5QrcodeScanner.render(
+                    (decodedText) => {
+                        // Al detectar:
+                        sendCode(decodedText);
+
+                        // Pausar brevemente para evitar lecturas múltiples
+                        html5QrcodeScanner.pause();
+                        setTimeout(() => html5QrcodeScanner.resume(), 2000);
+                    },
+                    (errorMessage) => {
+                        // Ignorar errores de escaneo cuadro a cuadro
+                    }
+                );
             }
         } else {
-            readerDiv.classList.add('hidden');
+            // Si está visible, ocultar y APAGAR para ahorrar batería
+            container.classList.add('hidden');
             if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear();
-                html5QrcodeScanner = null;
+                html5QrcodeScanner.clear().then(() => {
+                    html5QrcodeScanner = null; // Resetear variable
+                }).catch(error => {
+                    console.error("Error al detener cámara", error);
+                });
             }
         }
     }
 
-    // --- 3. LÓGICA BÚSQUEDA MANUAL (Restaurada) ---
-    const modalSearch = document.getElementById('modalSearch');
-    const searchInput = document.getElementById('searchInput');
-    const searchResults = document.getElementById('searchResults');
-
-    function openSearchModal() {
-        modalSearch.classList.remove('hidden');
-        searchInput.value = "";
-        searchResults.innerHTML = '<p class="text-gray-400 text-center text-sm mt-2">Escriba nombre para buscar...</p>';
-        setTimeout(() => searchInput.focus(), 100);
-    }
-
-    function closeSearchModal() {
-        modalSearch.classList.add('hidden');
-        rfidInput.focus();
-    }
-
-    async function executeSearch() {
-        const q = searchInput.value.trim();
-        if (q.length < 3) {
-            searchResults.innerHTML = '<p class="text-red-500 text-center text-sm">Escriba al menos 3 letras</p>';
-            return;
-        }
-        searchResults.innerHTML = '<div class="text-center py-2"><i class="fas fa-circle-notch fa-spin text-blue-500"></i> Buscando...</div>';
-        try {
-            const res = await fetch(`/lunch/search_person?q=${encodeURIComponent(q)}`);
-            const data = await res.json();
-            if (data.length === 0) {
-                searchResults.innerHTML = '<p class="text-gray-500 text-center text-sm">No se encontraron coincidencias.</p>';
-                return;
-            }
-            let html = '';
-            data.forEach(p => {
-                let photo = p.photo ? p.photo : `https://ui-avatars.com/api/?name=${p.name}`;
-                html += `
-                <div onclick="selectManualPerson('${p.code}')" class="flex items-center p-2 border rounded hover:bg-blue-50 cursor-pointer transition">
-                    <img src="${photo}" class="w-10 h-10 rounded-full object-cover border mr-3">
-                    <div class="flex-1">
-                        <p class="text-sm font-bold text-gray-800">${p.name}</p>
-                        <p class="text-xs text-gray-500">${p.type} - ${p.extra}</p>
-                    </div>
-                    <i class="fas fa-chevron-right text-gray-400"></i>
-                </div>`;
-            });
-            searchResults.innerHTML = html;
-        } catch (e) {
-            console.error(e);
-            searchResults.innerHTML = '<p class="text-red-500 text-center text-sm">Error en la búsqueda</p>';
-        }
-    }
-
-    function selectManualPerson(code) {
-        closeSearchModal();
-        sendCode(code);
-    }
-
-    // --- 4. PROCESAMIENTO E IMPRESIÓN ---
     async function sendCode(code) {
-        if (isProcessing || isPrinting) return;
+        if (isProcessing) return;
         isProcessing = true;
         try {
             const response = await fetch('/lunch/process', {
@@ -299,83 +249,156 @@
 
     function showResult(data) {
         document.getElementById('resultCard').classList.remove('hidden');
-        const btnPrint = document.getElementById('btnPrint');
-        if (btnPrint) btnPrint.classList.add('hidden');
+        document.getElementById('btnPrint').classList.add('hidden');
 
-        // Limpieza UI
+        // 1. LIMPIEZA INICIAL (Para borrar datos anteriores)
         document.getElementById('resName').innerText = "---";
         document.getElementById('resExtra').innerText = "";
         document.getElementById('resPersonType').innerText = "";
         document.getElementById('resLunchType').innerText = "--";
+
+        // Imagen por defecto (transparente o placeholder)
         document.getElementById('resPhoto').src = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 
+        // 2. LLENAR DATOS (Si existen)
         if (data.person) {
             document.getElementById('resName').innerText = data.person.name;
             document.getElementById('resExtra').innerText = data.person.extra;
             document.getElementById('resPersonType').innerText = data.person.type;
+
             let photo = data.person.photo ? data.person.photo : `https://ui-avatars.com/api/?name=${data.person.name}`;
             document.getElementById('resPhoto').src = photo;
         } else {
+            // SI NO SE ENCUENTRA (ID Errado)
             document.getElementById('resName').innerText = "NO ENCONTRADO";
-            document.getElementById('resPhoto').src = "https://ui-avatars.com/api/?name=X&background=fee2e2&color=ef4444";
+            document.getElementById('resPhoto').src = "https://ui-avatars.com/api/?name=X&background=fee2e2&color=ef4444"; // Avatar Rojo 'X'
         }
 
+        // 3. ESTILOS SEGÚN ESTADO
         const bg = document.getElementById('resultBg');
         const box = document.getElementById('resLunchBox');
         const lunchTitle = document.getElementById('resLunchType');
+
         document.getElementById('resMsg').innerText = data.message;
 
         if (data.status === 'success') {
+            // ÉXITO
             lunchTitle.innerText = data.lunch_type;
             const color = (data.lunch_type === 'Especial') ? 'purple' : 'green';
+
             bg.className = `border-4 border-${color}-500 bg-${color}-50 rounded-lg p-6 text-center transition-colors`;
             box.className = `mt-6 p-4 rounded-lg text-white bg-${color}-600 shadow-lg transition-colors`;
+
             try { document.getElementById('audio-success').play(); } catch (e) { }
 
-            // IMPRESIÓN
             if (data.ticket_data) {
                 prepareTicket(data.ticket_data);
-                if (btnPrint) btnPrint.classList.remove('hidden');
-
-                isPrinting = true;
-                setTimeout(() => {
-                    try { window.print(); } catch (e) { console.error(e); }
-                    finally {
-                        isPrinting = false;
-                        rfidInput.focus();
-                    }
-                }, 800);
+                document.getElementById('btnPrint').classList.remove('hidden');
+                setTimeout(() => window.print(), 500);
             }
 
         } else if (data.status === 'warning') {
+            // YA COMIÓ (ADVERTENCIA)
             lunchTitle.innerText = data.lunch_type || "NORMAL";
             bg.className = "border-4 border-orange-500 bg-orange-50 rounded-lg p-6 text-center transition-colors";
             box.className = "mt-6 p-4 rounded-lg text-white bg-orange-500 shadow-lg transition-colors";
+
             try { document.getElementById('audio-error').play(); } catch (e) { }
+
         } else {
+            // ERROR / DENEGADO / NO ENCONTRADO
             lunchTitle.innerText = "ERROR";
             bg.className = "border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center transition-colors";
             box.className = "mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg transition-colors";
+
             try { document.getElementById('audio-error').play(); } catch (e) { }
         }
     }
 
     function prepareTicket(data) {
+        // 1. Llenar textos
         document.getElementById('ticket-name').innerText = data.name;
-        document.getElementById('ticket-type').innerText = data.type;
+        document.getElementById('ticket-type').innerText = data.type; // NORMAL / ESPECIAL
         document.getElementById('ticket-extra').innerText = data.extra;
         document.getElementById('ticket-date').innerText = data.date;
         document.getElementById('ticket-time').innerText = data.time;
 
+        // 2. Generar QR
         const qrContainer = document.getElementById('ticket-qr');
-        qrContainer.innerHTML = "";
+        qrContainer.innerHTML = ""; // Limpiar anterior
 
+        // Data del QR: JSON compactado
         const qrText = `${data.name}|${data.type}|${data.date} ${data.time}`;
+
+        new QRCode(qrContainer, {
+            text: qrText,
+            width: 80,  // Tamaño pequeño para ticket
+            height: 80,
+            correctLevel: QRCode.CorrectLevel.L
+        });
+    }
+    // --- LÓGICA BÚSQUEDA MANUAL ---
+    const modalSearch = document.getElementById('modalSearch');
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+
+    function openSearchModal() {
+        modalSearch.classList.remove('hidden');
+        searchInput.value = "";
+        searchResults.innerHTML = '<p class="text-gray-400 text-center text-sm mt-2">Escriba nombre para buscar...</p>';
+        setTimeout(() => searchInput.focus(), 100);
+    }
+
+    function closeSearchModal() {
+        modalSearch.classList.add('hidden');
+        rfidInput.focus(); // Devolver foco al lector
+    }
+
+    async function executeSearch() {
+        const q = searchInput.value.trim();
+        if (q.length < 3) {
+            searchResults.innerHTML = '<p class="text-red-500 text-center text-sm">Escriba al menos 3 letras</p>';
+            return;
+        }
+
+        searchResults.innerHTML = '<div class="text-center py-2"><i class="fas fa-circle-notch fa-spin text-blue-500"></i> Buscando...</div>';
+
         try {
-            new QRCode(qrContainer, {
-                text: qrText, width: 100, height: 100, correctLevel: QRCode.CorrectLevel.L
+            const res = await fetch(`/lunch/search_person?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+
+            if (data.length === 0) {
+                searchResults.innerHTML = '<p class="text-gray-500 text-center text-sm">No se encontraron coincidencias.</p>';
+                return;
+            }
+
+            let html = '';
+            data.forEach(p => {
+                let photo = p.photo ? p.photo : `https://ui-avatars.com/api/?name=${p.name}`;
+
+                // Al hacer clic, llamamos a sendCode con el código (ID) de la persona
+                html += `
+                <div onclick="selectManualPerson('${p.code}')" class="flex items-center p-2 border rounded hover:bg-blue-50 cursor-pointer transition">
+                    <img src="${photo}" class="w-10 h-10 rounded-full object-cover border mr-3">
+                    <div class="flex-1">
+                        <p class="text-sm font-bold text-gray-800">${p.name}</p>
+                        <p class="text-xs text-gray-500">${p.type} - ${p.extra}</p>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </div>`;
             });
-        } catch (e) { console.error(e); }
+            searchResults.innerHTML = html;
+
+        } catch (e) {
+            console.error(e);
+            searchResults.innerHTML = '<p class="text-red-500 text-center text-sm">Error en la búsqueda</p>';
+        }
+    }
+
+    function selectManualPerson(code) {
+        closeSearchModal();
+        // Enviamos el código (ID o Cédula) al sistema principal como si fuera escrito manual
+        sendCode(code);
     }
 </script>
 {% endblock %}
