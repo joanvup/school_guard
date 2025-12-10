@@ -1,132 +1,140 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- ESTILOS DE IMPRESIÓN (TICKET) -->
+<!-- ESTILOS DE IMPRESIÓN Y UI -->
 <style>
-    /* Por defecto el ticket está oculto en la pantalla del PC/Móvil */
-    #printable-ticket {
-        display: none;
+    /* Estilos normales de pantalla */
+    .input-hidden-focus {
+        caret-color: transparent; /* Ocultar cursor parpadeante si molesta */
     }
 
+    /* ESTILOS EXCLUSIVOS DE IMPRESIÓN */
+    #printable-ticket { display: none; }
+
     @media print {
-
-        /* Ocultar todo lo que no sea el ticket */
-        body * {
-            visibility: hidden;
-        }
-
-        #printable-ticket,
-        #printable-ticket * {
-            visibility: visible;
-        }
-
-        /* Posicionar el ticket en la esquina superior izquierda */
+        /* Ocultar TODO excepto el ticket */
+        body * { visibility: hidden; }
+        #printable-ticket, #printable-ticket * { visibility: visible; }
+        
+        /* Posicionar ticket al inicio de la página */
         #printable-ticket {
             position: absolute;
             left: 0;
             top: 0;
             display: block !important;
             width: 72mm;
-            /* Un poco menos de 75 para margen */
-            height: 72mm;
+            /* No forzamos height fija para permitir contenido variable */
             padding: 2mm;
             text-align: center;
             font-family: 'Courier New', Courier, monospace;
-            /* Fuente tipo ticket */
             color: black;
             background: white;
         }
 
-        /* Configuración de página para impresora térmica */
+        /* Forzar saltos de página y márgenes cero */
         @page {
-            size: 75mm 75mm;
-            margin: 0;
+            size: 75mm auto; /* Ancho fijo, largo automático */
+            margin: 0mm;
         }
     }
 </style>
 
-<div class="max-w-2xl mx-auto no-print"> <!-- Clase no-print para lógica JS si se requiriera -->
-
+<div class="max-w-2xl mx-auto no-print">
+    
+    <!-- Header -->
     <div class="bg-green-600 text-white p-4 rounded-t-lg shadow-lg flex justify-between items-center">
         <div>
             <h2 class="text-2xl font-bold"><i class="fas fa-utensils mr-2"></i> Control de Almuerzos</h2>
-            <p class="text-green-100 text-sm">Escanee QR o acerque Tarjeta RFID</p>
+            <p class="text-green-100 text-sm">Escanee QR, Tarjeta o Digite ID</p>
         </div>
-        <div id="inputStatus" class="bg-green-700 px-3 py-1 rounded text-xs font-mono">
-            <i class="fas fa-keyboard"></i> Lector Listo
+        <div id="inputStatus" class="bg-green-700 px-3 py-1 rounded text-xs font-mono transition-colors">
+            <i class="fas fa-keyboard"></i> Listo
         </div>
     </div>
 
+    <!-- Body -->
     <div class="bg-white p-6 rounded-b-lg shadow-lg border-x border-b">
-
+        
+        <!-- INPUT: Numérico para móviles -->
         <div class="mb-4 relative">
-            <input type="text" id="rfidInput"
-                class="w-full border-2 border-gray-300 rounded p-3 text-lg focus:border-green-500 focus:ring-green-200 focus:outline-none"
-                placeholder="Clic aquí y pase la tarjeta..." autocomplete="off">
-            <div class="absolute right-3 top-4 text-gray-400"><i class="fas fa-wifi"></i></div>
+            <input type="text" 
+                   id="rfidInput" 
+                   class="w-full border-2 border-gray-300 rounded p-3 text-lg focus:border-green-500 focus:ring-green-200 focus:outline-none font-mono tracking-widest input-hidden-focus" 
+                   placeholder="Clic aquí para escanear..." 
+                   autocomplete="off"
+                   inputmode="numeric" 
+                   pattern="[0-9]*"
+                   oninput="this.value = this.value.replace(/[^0-9a-zA-Z]/g, '')"> 
+                   <!-- Permitimos letras por si el RFID es Hexadecimal, si es solo numeros usa: /[^0-9]/g -->
+            
+            <div class="absolute right-3 top-4 text-gray-400">
+                <i class="fas fa-wifi"></i>
+            </div>
         </div>
 
-        <div class="mb-4">
-            <button onclick="toggleCamera()"
-                class="text-green-600 text-sm font-bold underline mb-2 hover:text-green-800 transition">
+        <!-- BOTONES ACCIÓN -->
+        <div class="flex flex-wrap gap-4 mb-4">
+            <button onclick="toggleCamera()" class="text-green-600 text-sm font-bold underline hover:text-green-800 transition">
                 <i class="fas fa-camera"></i> Mostrar/Ocultar Cámara
             </button>
-            <button onclick="openSearchModal()" class="text-blue-600 text-sm font-bold underline">
+            <button onclick="openSearchModal()" class="text-blue-600 text-sm font-bold underline hover:text-blue-800 transition">
                 <i class="fas fa-search"></i> Buscar por Nombre
             </button>
-
-            <!-- Contenedor idéntico al de salidas -->
-            <div id="cameraContainer"
-                class="hidden bg-black rounded-lg overflow-hidden shadow-xl relative transition-all"
-                style="min-height: 300px;">
-                <div id="reader" class="w-full h-full"></div>
-            </div>
         </div>
 
-        <!-- RESULTADO EN PANTALLA -->
-        <div id="resultCard" class="hidden">
-            <div id="resultBg" class="border-4 rounded-lg p-6 text-center">
+        <!-- CONTENEDOR CÁMARA -->
+        <div id="cameraContainer" class="hidden bg-black rounded-lg overflow-hidden shadow-xl relative mb-4 transition-all" style="min-height: 300px;">
+            <div id="reader" class="w-full h-full"></div>
+        </div>
+
+        <!-- RESULTADO -->
+        <div id="resultCard" class="hidden animate-fade-in-up">
+            <div id="resultBg" class="border-4 rounded-lg p-6 text-center transition-colors duration-300">
+                
                 <div class="flex flex-col items-center">
-                    <img id="resPhoto" src=""
-                        class="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg mb-4">
-                    <h2 id="resName" class="text-2xl font-bold text-gray-800 leading-tight"></h2>
+                    <img id="resPhoto" src="" class="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg mb-4 bg-gray-100">
+                    <h2 id="resName" class="text-2xl font-bold text-gray-800 leading-tight">---</h2>
                     <p id="resExtra" class="text-gray-500 font-bold text-lg mb-1"></p>
-                    <span id="resPersonType"
-                        class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-xs uppercase font-bold"></span>
+                    <span id="resPersonType" class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-xs uppercase font-bold"></span>
                 </div>
-                <div id="resLunchBox" class="mt-6 p-4 rounded-lg text-white">
+
+                <div id="resLunchBox" class="mt-6 p-4 rounded-lg text-white transition-colors duration-300">
                     <p class="text-sm uppercase opacity-90 font-bold">Tipo de Menú</p>
-                    <h1 id="resLunchType" class="text-5xl font-extrabold tracking-wider">NORMAL</h1>
+                    <h1 id="resLunchType" class="text-5xl font-extrabold tracking-wider">--</h1>
                 </div>
+
                 <div id="resMsg" class="mt-4 font-bold text-lg text-gray-700"></div>
-                <!-- Botón de reimprimir manual -->
-                <button id="btnPrint" onclick="window.print()"
-                    class="mt-4 text-sm text-gray-500 underline hidden">Reimprimir Ticket</button>
+                
+                <!-- Botón manual por si falla la impresión automática -->
+                <button id="btnPrint" onclick="window.print()" class="mt-6 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-bold hidden">
+                    <i class="fas fa-print mr-2"></i> Reimprimir Ticket
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ESTRUCTURA DEL TICKET (Oculto hasta imprimir) -->
+<!-- TICKET OCULTO (Solo visible al imprimir) -->
 <div id="printable-ticket">
-    <div style="font-size: 10px; font-weight: bold; margin-bottom: 5px;">COLEGIO BILINGÜE</div>
-    <div style="font-size: 8px; margin-bottom: 5px;">CONTROL DE ALIMENTACIÓN</div>
+    <div style="font-size: 12px; font-weight: bold; margin-bottom: 5px;">COLEGIO BILINGÜE</div>
+    <div style="font-size: 9px; margin-bottom: 5px;">CONTROL DE ALIMENTACIÓN</div>
     <hr style="border-top: 1px dashed #000; margin: 5px 0;">
-
-    <div id="ticket-type" style="font-size: 16px; font-weight: 900; margin: 8px 0;">NORMAL</div>
-
-    <div id="ticket-name"
-        style="font-size: 10px; font-weight: bold; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
-        NOMBRE ESTUDIANTE</div>
-    <div id="ticket-extra" style="font-size: 9px;">CURSO 11A</div>
-
-    <div style="font-size: 8px; margin-top: 5px;">
-        <span id="ticket-date">2025-10-24</span> - <span id="ticket-time">12:30 PM</span>
+    
+    <div id="ticket-type" style="font-size: 18px; font-weight: 900; margin: 8px 0;">NORMAL</div>
+    
+    <div id="ticket-name" style="font-size: 11px; font-weight: bold; line-height: 1.2;">NOMBRE</div>
+    <div id="ticket-extra" style="font-size: 10px; margin-top: 2px;">CURSO</div>
+    
+    <div style="font-size: 9px; margin-top: 8px;">
+        <span id="ticket-date">YYYY-MM-DD</span> - <span id="ticket-time">HH:MM</span>
     </div>
-
-    <!-- Contenedor QR -->
-    <div id="ticket-qr" style="display: flex; justify-content: center; margin-top: 5px;"></div>
+    
+    <!-- Contenedor QR del Ticket -->
+    <div style="display: flex; justify-content: center; margin-top: 8px;">
+        <div id="ticket-qr"></div>
+    </div>
 </div>
+
 <!-- MODAL BÚSQUEDA MANUAL -->
 <div id="modalSearch" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
@@ -134,31 +142,28 @@
             <h3 class="text-lg font-bold text-white"><i class="fas fa-search mr-2"></i> Buscar Persona</h3>
             <button onclick="closeSearchModal()" class="text-blue-100 hover:text-white text-2xl">&times;</button>
         </div>
-
         <div class="p-4">
             <div class="flex gap-2 mb-4">
-                <input type="text" id="searchInput" placeholder="Escriba nombre (min 3 letras)..."
-                    class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-300 outline-none"
-                    onkeydown="if(event.key === 'Enter') executeSearch()">
-                <button onclick="executeSearch()"
-                    class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700">
+                <input type="text" id="searchInput" placeholder="Escriba nombre (min 3 letras)..." 
+                       class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-300 outline-none"
+                       onkeydown="if(event.key === 'Enter') executeSearch()">
+                <button onclick="executeSearch()" class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700">
                     <i class="fas fa-search"></i>
                 </button>
             </div>
-
-            <!-- Lista Resultados -->
             <div id="searchResults" class="space-y-2 max-h-60 overflow-y-auto">
                 <p class="text-gray-400 text-center text-sm mt-2">Los resultados aparecerán aquí...</p>
             </div>
         </div>
     </div>
 </div>
-<!-- Sonidos y Librerías -->
+
+<!-- AUDIOS -->
 <audio id="audio-success" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
 <audio id="audio-error" src="https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg"></audio>
 
+<!-- LIBRERÍAS -->
 <script src="/static/js/html5-qrcode.min.js"></script>
-<!-- Librería para GENERAR el QR del ticket -->
 <script src="/static/js/qrcode.min.js"></script>
 
 <script>
@@ -167,12 +172,22 @@
     let isProcessing = false;
     let html5QrcodeScanner = null;
 
+    // --- 1. GESTIÓN DEL INPUT Y FOCO ---
     rfidInput.focus();
-    document.addEventListener('click', () => rfidInput.focus());
+    
+    // Evitar perder el foco en desktop, pero permitirlo en móvil si se cierra teclado
+    document.addEventListener('click', (e) => {
+        // Solo re-enfocar si no se hizo clic en un botón o input
+        if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'A') {
+            rfidInput.focus();
+        }
+    });
+
     rfidInput.addEventListener('blur', () => {
         inputStatus.className = "bg-yellow-500 px-3 py-1 rounded text-xs font-mono text-white";
-        inputStatus.innerHTML = "Lector Desconectado";
+        inputStatus.innerHTML = "Lector en Pausa";
     });
+
     rfidInput.addEventListener('focus', () => {
         inputStatus.className = "bg-green-700 px-3 py-1 rounded text-xs font-mono text-white";
         inputStatus.innerHTML = "Lector Listo";
@@ -181,163 +196,158 @@
     rfidInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
             const code = rfidInput.value;
-            rfidInput.value = '';
-            if (code.trim().length > 0) sendCode(code);
+            rfidInput.value = ''; 
+            if(code.trim().length > 0) sendCode(code);
         }
     });
 
-    // --- LOGICA CÁMARA MEJORADA ---
-    function toggleCamera() {
+    // --- 2. GESTIÓN DE CÁMARA (ROBUSTA) ---
+    async function toggleCamera() {
         const container = document.getElementById('cameraContainer');
-
-        // Si está oculto, mostrar y encender
+        
         if (container.classList.contains('hidden')) {
+            // MOSTRAR
             container.classList.remove('hidden');
-
-            // Si no está inicializado, crearlo
             if (!html5QrcodeScanner) {
                 html5QrcodeScanner = new Html5QrcodeScanner(
-                    "reader",
-                    {
-                        fps: 10,
-                        qrbox: { width: 250, height: 250 }, // Tamaño de caja idéntico al de salidas
-                        aspectRatio: 1.0
-                    },
-                    /* verbose= */ false
+                    "reader", 
+                    { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+                    false
                 );
-
-                // Renderizar (Esto pide permisos y muestra el selector de cámara)
-                html5QrcodeScanner.render(
-                    (decodedText) => {
-                        // Al detectar:
-                        sendCode(decodedText);
-
-                        // Pausar brevemente para evitar lecturas múltiples
-                        html5QrcodeScanner.pause();
-                        setTimeout(() => html5QrcodeScanner.resume(), 2000);
-                    },
-                    (errorMessage) => {
-                        // Ignorar errores de escaneo cuadro a cuadro
-                    }
-                );
+                html5QrcodeScanner.render(onScanSuccess, (err) => {});
             }
         } else {
-            // Si está visible, ocultar y APAGAR para ahorrar batería
+            // OCULTAR Y LIMPIAR MEMORIA
             container.classList.add('hidden');
             if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear().then(() => {
-                    html5QrcodeScanner = null; // Resetear variable
-                }).catch(error => {
-                    console.error("Error al detener cámara", error);
-                });
+                try {
+                    await html5QrcodeScanner.clear();
+                    html5QrcodeScanner = null;
+                } catch (error) {
+                    console.error("Error al limpiar cámara", error);
+                }
             }
         }
     }
 
+    function onScanSuccess(decodedText) {
+        if (isProcessing) return;
+        sendCode(decodedText);
+        // Pausa breve para UX
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.pause();
+            setTimeout(() => html5QrcodeScanner.resume(), 2500);
+        }
+    }
+
+    // --- 3. ENVÍO DE DATOS ---
     async function sendCode(code) {
         if (isProcessing) return;
         isProcessing = true;
+        
+        // Feedback visual de carga (opcional)
+        // document.getElementById('inputStatus').innerText = "Procesando...";
+
         try {
             const response = await fetch('/lunch/process', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code })
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code })
             });
             const data = await response.json();
             showResult(data);
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error(e);
+            alert("Error de conexión con el servidor");
+        }
+        
         isProcessing = false;
+        rfidInput.focus(); // Devolver foco siempre
     }
 
+    // --- 4. MOSTRAR RESULTADO ---
     function showResult(data) {
         document.getElementById('resultCard').classList.remove('hidden');
         document.getElementById('btnPrint').classList.add('hidden');
 
-        // 1. LIMPIEZA INICIAL (Para borrar datos anteriores)
+        // Limpieza explícita
         document.getElementById('resName').innerText = "---";
         document.getElementById('resExtra').innerText = "";
         document.getElementById('resPersonType').innerText = "";
         document.getElementById('resLunchType').innerText = "--";
-
-        // Imagen por defecto (transparente o placeholder)
         document.getElementById('resPhoto').src = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 
-        // 2. LLENAR DATOS (Si existen)
+        // Llenar Datos
         if (data.person) {
             document.getElementById('resName').innerText = data.person.name;
             document.getElementById('resExtra').innerText = data.person.extra;
             document.getElementById('resPersonType').innerText = data.person.type;
-
             let photo = data.person.photo ? data.person.photo : `https://ui-avatars.com/api/?name=${data.person.name}`;
             document.getElementById('resPhoto').src = photo;
         } else {
-            // SI NO SE ENCUENTRA (ID Errado)
             document.getElementById('resName').innerText = "NO ENCONTRADO";
-            document.getElementById('resPhoto').src = "https://ui-avatars.com/api/?name=X&background=fee2e2&color=ef4444"; // Avatar Rojo 'X'
+            document.getElementById('resPhoto').src = "https://ui-avatars.com/api/?name=X&background=fee2e2&color=ef4444";
         }
 
-        // 3. ESTILOS SEGÚN ESTADO
         const bg = document.getElementById('resultBg');
         const box = document.getElementById('resLunchBox');
         const lunchTitle = document.getElementById('resLunchType');
-
         document.getElementById('resMsg').innerText = data.message;
 
+        // Lógica de Colores y Ticket
         if (data.status === 'success') {
-            // ÉXITO
             lunchTitle.innerText = data.lunch_type;
             const color = (data.lunch_type === 'Especial') ? 'purple' : 'green';
+            bg.className = `border-4 border-${color}-500 bg-${color}-50 rounded-lg p-6 text-center`;
+            box.className = `mt-6 p-4 rounded-lg text-white bg-${color}-600 shadow-lg`;
+            try { document.getElementById('audio-success').play(); } catch(e){}
 
-            bg.className = `border-4 border-${color}-500 bg-${color}-50 rounded-lg p-6 text-center transition-colors`;
-            box.className = `mt-6 p-4 rounded-lg text-white bg-${color}-600 shadow-lg transition-colors`;
-
-            try { document.getElementById('audio-success').play(); } catch (e) { }
-
+            // IMPRESIÓN ROBUSTA
             if (data.ticket_data) {
                 prepareTicket(data.ticket_data);
                 document.getElementById('btnPrint').classList.remove('hidden');
-                setTimeout(() => window.print(), 500);
+                
+                // AUMENTAMOS TIEMPO A 1000ms (1 segundo) para asegurar renderizado en móviles lentos
+                setTimeout(() => {
+                    window.print();
+                }, 1000); 
             }
 
         } else if (data.status === 'warning') {
-            // YA COMIÓ (ADVERTENCIA)
             lunchTitle.innerText = data.lunch_type || "NORMAL";
-            bg.className = "border-4 border-orange-500 bg-orange-50 rounded-lg p-6 text-center transition-colors";
-            box.className = "mt-6 p-4 rounded-lg text-white bg-orange-500 shadow-lg transition-colors";
-
-            try { document.getElementById('audio-error').play(); } catch (e) { }
+            bg.className = "border-4 border-orange-500 bg-orange-50 rounded-lg p-6 text-center";
+            box.className = "mt-6 p-4 rounded-lg text-white bg-orange-500 shadow-lg";
+            try { document.getElementById('audio-error').play(); } catch(e){}
 
         } else {
-            // ERROR / DENEGADO / NO ENCONTRADO
             lunchTitle.innerText = "ERROR";
-            bg.className = "border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center transition-colors";
-            box.className = "mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg transition-colors";
-
-            try { document.getElementById('audio-error').play(); } catch (e) { }
+            bg.className = "border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center";
+            box.className = "mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg";
+            try { document.getElementById('audio-error').play(); } catch(e){}
         }
     }
 
+    // --- 5. PREPARAR TICKET ---
     function prepareTicket(data) {
-        // 1. Llenar textos
         document.getElementById('ticket-name').innerText = data.name;
-        document.getElementById('ticket-type').innerText = data.type; // NORMAL / ESPECIAL
+        document.getElementById('ticket-type').innerText = data.type;
         document.getElementById('ticket-extra').innerText = data.extra;
         document.getElementById('ticket-date').innerText = data.date;
         document.getElementById('ticket-time').innerText = data.time;
 
-        // 2. Generar QR
         const qrContainer = document.getElementById('ticket-qr');
-        qrContainer.innerHTML = ""; // Limpiar anterior
-
-        // Data del QR: JSON compactado
-        const qrText = `${data.name}|${data.type}|${data.date} ${data.time}`;
-
+        qrContainer.innerHTML = ""; // Limpiar cualquier QR previo
+        
+        // Generar nuevo QR
         new QRCode(qrContainer, {
-            text: qrText,
-            width: 80,  // Tamaño pequeño para ticket
-            height: 80,
-            correctLevel: QRCode.CorrectLevel.L
+            text: `${data.name}|${data.type}|${data.time}`,
+            width: 128,  // Aumentamos resolución interna
+            height: 128,
+            correctLevel : QRCode.CorrectLevel.L
         });
     }
-    // --- LÓGICA BÚSQUEDA MANUAL ---
+
+    // --- 6. BÚSQUEDA MANUAL ---
     const modalSearch = document.getElementById('modalSearch');
     const searchInput = document.getElementById('searchInput');
     const searchResults = document.getElementById('searchResults');
@@ -345,40 +355,32 @@
     function openSearchModal() {
         modalSearch.classList.remove('hidden');
         searchInput.value = "";
-        searchResults.innerHTML = '<p class="text-gray-400 text-center text-sm mt-2">Escriba nombre para buscar...</p>';
+        searchResults.innerHTML = '<p class="text-gray-400 text-center text-sm mt-2">Digite nombre...</p>';
         setTimeout(() => searchInput.focus(), 100);
     }
 
     function closeSearchModal() {
         modalSearch.classList.add('hidden');
-        rfidInput.focus(); // Devolver foco al lector
+        rfidInput.focus();
     }
 
     async function executeSearch() {
         const q = searchInput.value.trim();
-        if (q.length < 3) {
-            searchResults.innerHTML = '<p class="text-red-500 text-center text-sm">Escriba al menos 3 letras</p>';
-            return;
-        }
-
-        searchResults.innerHTML = '<div class="text-center py-2"><i class="fas fa-circle-notch fa-spin text-blue-500"></i> Buscando...</div>';
+        if (q.length < 3) return;
+        searchResults.innerHTML = '<div class="text-center py-2"><i class="fas fa-circle-notch fa-spin text-blue-500"></i></div>';
 
         try {
             const res = await fetch(`/lunch/search_person?q=${encodeURIComponent(q)}`);
             const data = await res.json();
-
             if (data.length === 0) {
-                searchResults.innerHTML = '<p class="text-gray-500 text-center text-sm">No se encontraron coincidencias.</p>';
+                searchResults.innerHTML = '<p class="text-gray-500 text-center text-sm">Sin resultados.</p>';
                 return;
             }
-
             let html = '';
             data.forEach(p => {
                 let photo = p.photo ? p.photo : `https://ui-avatars.com/api/?name=${p.name}`;
-
-                // Al hacer clic, llamamos a sendCode con el código (ID) de la persona
                 html += `
-                <div onclick="selectManualPerson('${p.code}')" class="flex items-center p-2 border rounded hover:bg-blue-50 cursor-pointer transition">
+                <div onclick="selectManual('${p.code}')" class="flex items-center p-2 border rounded hover:bg-blue-50 cursor-pointer transition">
                     <img src="${photo}" class="w-10 h-10 rounded-full object-cover border mr-3">
                     <div class="flex-1">
                         <p class="text-sm font-bold text-gray-800">${p.name}</p>
@@ -388,16 +390,11 @@
                 </div>`;
             });
             searchResults.innerHTML = html;
-
-        } catch (e) {
-            console.error(e);
-            searchResults.innerHTML = '<p class="text-red-500 text-center text-sm">Error en la búsqueda</p>';
-        }
+        } catch (e) { searchResults.innerHTML = 'Error'; }
     }
 
-    function selectManualPerson(code) {
+    function selectManual(code) {
         closeSearchModal();
-        // Enviamos el código (ID o Cédula) al sistema principal como si fuera escrito manual
         sendCode(code);
     }
 </script>
