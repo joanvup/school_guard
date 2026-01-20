@@ -5,17 +5,27 @@
 <style>
     /* Estilos normales de pantalla */
     .input-hidden-focus {
-        caret-color: transparent; /* Ocultar cursor parpadeante si molesta */
+        caret-color: transparent;
+        /* Ocultar cursor parpadeante si molesta */
     }
 
     /* ESTILOS EXCLUSIVOS DE IMPRESIÓN */
-    #printable-ticket { display: none; }
+    #printable-ticket {
+        display: none;
+    }
 
     @media print {
+
         /* Ocultar TODO excepto el ticket */
-        body * { visibility: hidden; }
-        #printable-ticket, #printable-ticket * { visibility: visible; }
-        
+        body * {
+            visibility: hidden;
+        }
+
+        #printable-ticket,
+        #printable-ticket * {
+            visibility: visible;
+        }
+
         /* Posicionar ticket al inicio de la página */
         #printable-ticket {
             position: absolute;
@@ -33,14 +43,15 @@
 
         /* Forzar saltos de página y márgenes cero */
         @page {
-            size: 75mm auto; /* Ancho fijo, largo automático */
+            size: 75mm auto;
+            /* Ancho fijo, largo automático */
             margin: 0mm;
         }
     }
 </style>
 
 <div class="max-w-2xl mx-auto no-print">
-    
+
     <!-- Header -->
     <div class="bg-green-600 text-white p-4 rounded-t-lg shadow-lg flex justify-between items-center">
         <div>
@@ -54,19 +65,15 @@
 
     <!-- Body -->
     <div class="bg-white p-6 rounded-b-lg shadow-lg border-x border-b">
-        
+
         <!-- INPUT: Numérico para móviles -->
         <div class="mb-4 relative">
-            <input type="text" 
-                   id="rfidInput" 
-                   class="w-full border-2 border-gray-300 rounded p-3 text-lg focus:border-green-500 focus:ring-green-200 focus:outline-none font-mono tracking-widest input-hidden-focus" 
-                   placeholder="Clic aquí para escanear..." 
-                   autocomplete="off"
-                   inputmode="numeric" 
-                   pattern="[0-9]*"
-                   oninput="this.value = this.value.replace(/[^0-9a-zA-Z]/g, '')"> 
-                   <!-- Permitimos letras por si el RFID es Hexadecimal, si es solo numeros usa: /[^0-9]/g -->
-            
+            <input type="text" id="rfidInput"
+                class="w-full border-2 border-gray-300 rounded p-3 text-lg focus:border-green-500 focus:ring-green-200 focus:outline-none font-mono tracking-widest input-hidden-focus"
+                placeholder="Clic aquí para escanear..." autocomplete="off" inputmode="numeric" pattern="[0-9]*"
+                oninput="this.value = this.value.replace(/[^0-9a-zA-Z]/g, '')">
+            <!-- Permitimos letras por si el RFID es Hexadecimal, si es solo numeros usa: /[^0-9]/g -->
+
             <div class="absolute right-3 top-4 text-gray-400">
                 <i class="fas fa-wifi"></i>
             </div>
@@ -74,28 +81,34 @@
 
         <!-- BOTONES ACCIÓN -->
         <div class="flex flex-wrap gap-4 mb-4">
-            <button onclick="toggleCamera()" class="text-green-600 text-sm font-bold underline hover:text-green-800 transition">
+            <button onclick="toggleCamera()"
+                class="text-green-600 text-sm font-bold underline hover:text-green-800 transition">
                 <i class="fas fa-camera"></i> Mostrar/Ocultar Cámara
             </button>
-            <button onclick="openSearchModal()" class="text-blue-600 text-sm font-bold underline hover:text-blue-800 transition">
+            <button onclick="openSearchModal()"
+                class="text-blue-600 text-sm font-bold underline hover:text-blue-800 transition">
                 <i class="fas fa-search"></i> Buscar por Nombre
             </button>
         </div>
 
         <!-- CONTENEDOR CÁMARA -->
-        <div id="cameraContainer" class="hidden bg-black rounded-lg overflow-hidden shadow-xl relative mb-4 transition-all" style="min-height: 300px;">
+        <div id="cameraContainer"
+            class="hidden bg-black rounded-lg overflow-hidden shadow-xl relative mb-4 transition-all"
+            style="min-height: 300px;">
             <div id="reader" class="w-full h-full"></div>
         </div>
 
         <!-- RESULTADO -->
         <div id="resultCard" class="hidden animate-fade-in-up">
             <div id="resultBg" class="border-4 rounded-lg p-6 text-center transition-colors duration-300">
-                
+
                 <div class="flex flex-col items-center">
-                    <img id="resPhoto" src="" class="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg mb-4 bg-gray-100">
+                    <img id="resPhoto" src=""
+                        class="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg mb-4 bg-gray-100">
                     <h2 id="resName" class="text-2xl font-bold text-gray-800 leading-tight">---</h2>
                     <p id="resExtra" class="text-gray-500 font-bold text-lg mb-1"></p>
-                    <span id="resPersonType" class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-xs uppercase font-bold"></span>
+                    <span id="resPersonType"
+                        class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-xs uppercase font-bold"></span>
                 </div>
 
                 <div id="resLunchBox" class="mt-6 p-4 rounded-lg text-white transition-colors duration-300">
@@ -104,9 +117,10 @@
                 </div>
 
                 <div id="resMsg" class="mt-4 font-bold text-lg text-gray-700"></div>
-                
+
                 <!-- Botón manual por si falla la impresión automática -->
-                <button id="btnPrint" onclick="window.print()" class="mt-6 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-bold hidden">
+                <button id="btnPrint" onclick="window.print()"
+                    class="mt-6 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-bold hidden">
                     <i class="fas fa-print mr-2"></i> Reimprimir Ticket
                 </button>
             </div>
@@ -119,16 +133,16 @@
     <div style="font-size: 12px; font-weight: bold; margin-bottom: 5px;">COLEGIO BILINGÜE</div>
     <div style="font-size: 9px; margin-bottom: 5px;">CONTROL DE ALIMENTACIÓN</div>
     <hr style="border-top: 1px dashed #000; margin: 5px 0;">
-    
+
     <div id="ticket-type" style="font-size: 18px; font-weight: 900; margin: 8px 0;">NORMAL</div>
-    
+
     <div id="ticket-name" style="font-size: 11px; font-weight: bold; line-height: 1.2;">NOMBRE</div>
     <div id="ticket-extra" style="font-size: 10px; margin-top: 2px;">CURSO</div>
-    
+
     <div style="font-size: 9px; margin-top: 8px;">
         <span id="ticket-date">YYYY-MM-DD</span> - <span id="ticket-time">HH:MM</span>
     </div>
-    
+
     <!-- Contenedor QR del Ticket -->
     <div style="display: flex; justify-content: center; margin-top: 8px;">
         <div id="ticket-qr"></div>
@@ -144,10 +158,11 @@
         </div>
         <div class="p-4">
             <div class="flex gap-2 mb-4">
-                <input type="text" id="searchInput" placeholder="Escriba nombre (min 3 letras)..." 
-                       class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-300 outline-none"
-                       onkeydown="if(event.key === 'Enter') executeSearch()">
-                <button onclick="executeSearch()" class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700">
+                <input type="text" id="searchInput" placeholder="Escriba nombre (min 3 letras)..."
+                    class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-300 outline-none"
+                    onkeydown="if(event.key === 'Enter') executeSearch()">
+                <button onclick="executeSearch()"
+                    class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700">
                     <i class="fas fa-search"></i>
                 </button>
             </div>
@@ -174,7 +189,7 @@
 
     // --- 1. GESTIÓN DEL INPUT Y FOCO ---
     rfidInput.focus();
-    
+
     // Evitar perder el foco en desktop, pero permitirlo en móvil si se cierra teclado
     document.addEventListener('click', (e) => {
         // Solo re-enfocar si no se hizo clic en un botón o input
@@ -196,25 +211,25 @@
     rfidInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
             const code = rfidInput.value;
-            rfidInput.value = ''; 
-            if(code.trim().length > 0) sendCode(code);
+            rfidInput.value = '';
+            if (code.trim().length > 0) sendCode(code);
         }
     });
 
     // --- 2. GESTIÓN DE CÁMARA (ROBUSTA) ---
     async function toggleCamera() {
         const container = document.getElementById('cameraContainer');
-        
+
         if (container.classList.contains('hidden')) {
             // MOSTRAR
             container.classList.remove('hidden');
             if (!html5QrcodeScanner) {
                 html5QrcodeScanner = new Html5QrcodeScanner(
-                    "reader", 
+                    "reader",
                     { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
                     false
                 );
-                html5QrcodeScanner.render(onScanSuccess, (err) => {});
+                html5QrcodeScanner.render(onScanSuccess, (err) => { });
             }
         } else {
             // OCULTAR Y LIMPIAR MEMORIA
@@ -244,7 +259,7 @@
     async function sendCode(code) {
         if (isProcessing) return;
         isProcessing = true;
-        
+
         // Feedback visual de carga (opcional)
         // document.getElementById('inputStatus').innerText = "Procesando...";
 
@@ -258,9 +273,10 @@
             showResult(data);
         } catch (e) {
             console.error(e);
-            alert("Error de conexión con el servidor");
+            print(e);
+            alert("Error de conexión con el servidor. " + e);
         }
-        
+
         isProcessing = false;
         rfidInput.focus(); // Devolver foco siempre
     }
@@ -300,35 +316,36 @@
             const color = (data.lunch_type === 'Especial') ? 'purple' : 'green';
             bg.className = `border-4 border-${color}-500 bg-${color}-50 rounded-lg p-6 text-center`;
             box.className = `mt-6 p-4 rounded-lg text-white bg-${color}-600 shadow-lg`;
-            try { document.getElementById('audio-success').play(); } catch(e){}
+            try { document.getElementById('audio-success').play(); } catch (e) { }
 
             // IMPRESIÓN ROBUSTA
             if (data.ticket_data) {
                 prepareTicket(data.ticket_data);
                 document.getElementById('btnPrint').classList.remove('hidden');
-                
+
                 // AUMENTAMOS TIEMPO A 1000ms (1 segundo) para asegurar renderizado en móviles lentos
                 setTimeout(() => {
                     window.print();
-                }, 1000); 
+                }, 1000);
             }
 
         } else if (data.status === 'warning') {
             lunchTitle.innerText = data.lunch_type || "NORMAL";
             bg.className = "border-4 border-orange-500 bg-orange-50 rounded-lg p-6 text-center";
             box.className = "mt-6 p-4 rounded-lg text-white bg-orange-500 shadow-lg";
-            try { document.getElementById('audio-error').play(); } catch(e){}
+            try { document.getElementById('audio-error').play(); } catch (e) { }
 
         } else {
             lunchTitle.innerText = "ERROR";
             bg.className = "border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center";
             box.className = "mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg";
-            try { document.getElementById('audio-error').play(); } catch(e){}
+            try { document.getElementById('audio-error').play(); } catch (e) { }
         }
     }
 
     // --- 5. PREPARAR TICKET ---
     function prepareTicket(data) {
+        // Texto visible (sin cambios)
         document.getElementById('ticket-name').innerText = data.name;
         document.getElementById('ticket-type').innerText = data.type;
         document.getElementById('ticket-extra').innerText = data.extra;
@@ -337,14 +354,29 @@
 
         const qrContainer = document.getElementById('ticket-qr');
         qrContainer.innerHTML = ""; // Limpiar cualquier QR previo
-        
-        // Generar nuevo QR
-        new QRCode(qrContainer, {
-            text: `${data.name}|${data.type}|${data.time}`,
-            width: 128,  // Aumentamos resolución interna
-            height: 128,
-            correctLevel : QRCode.CorrectLevel.L
-        });
+
+        // PREPARAR DATOS PARA EL QR
+        // Si el nombre es muy largo (>20 caracteres), lo cortamos para que quepa en el QR
+        let safeName = data.name.length > 20 ? data.name.substring(0, 20) : data.name;
+
+        // Eliminamos tildes o caracteres raros que ocupan más bits
+        safeName = safeName.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        // Generar nuevo QR con manejo de errores
+        try {
+            new QRCode(qrContainer, {
+                text: `${safeName}|${data.type}|${data.time}`,
+                width: 128,
+                height: 128,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.L // Nivel L permite más datos pero es menos robusto a daños
+            });
+        } catch (qrError) {
+            console.error("Error generando QR:", qrError);
+            qrContainer.innerHTML = "<span style='font-size:10px'>Error QR</span>";
+            // No lanzamos el error hacia arriba para evitar el alert de 'Error de Servidor'
+        }
     }
 
     // --- 6. BÚSQUEDA MANUAL ---
