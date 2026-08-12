@@ -33,6 +33,22 @@
             </div>
         </div>
 
+        <!-- Grupo Generar -->
+        <div class="relative inline-block text-left group">
+            <button
+                class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2 px-4 rounded inline-flex items-center">
+                <i class="fas fa-print mr-2"></i> Generar
+            </button>
+            <div class="absolute right-0 w-48 bg-white rounded-md shadow-lg hidden group-hover:block z-50 border">
+                <a href="/cards/employee/batch/pdf" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-id-card mr-2"></i> Todos los Carnets (PDF)
+                </a>
+                <a href="/cards/employee/batch/qr-images" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-qrcode mr-2"></i> Todos los QRs (ZIP)
+                </a>
+            </div>
+        </div>
+
         <button onclick="document.getElementById('modalCreate').classList.remove('hidden')"
             class="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-2 px-4 rounded inline-flex items-center">
             <i class="fas fa-plus mr-2"></i> Nuevo

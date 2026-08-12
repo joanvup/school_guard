@@ -199,3 +199,27 @@ def download_all_qrs_zip(db: Session = Depends(database.get_db)):
             zf.writestr(f"{s.student_id}.png", ib.getvalue())
     zip_buffer.seek(0)
     return Response(content=zip_buffer.getvalue(), headers={'Content-Disposition': 'attachment; filename="qrs.zip"'}, media_type='application/zip')
+
+@router.get("/employee/batch/pdf")
+def download_all_employee_cards_pdf(db: Session = Depends(database.get_db)):
+    employees = db.query(models.Employee).order_by(models.Employee.full_name).all()
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=(CARD_WIDTH, CARD_HEIGHT))
+    for e in employees:
+        draw_card(c, e, is_employee=True)
+        c.showPage()
+    c.save()
+    buffer.seek(0)
+    return Response(content=buffer.getvalue(), headers={'Content-Disposition': 'attachment; filename="todos_carnets_empleados.pdf"'}, media_type='application/pdf')
+
+@router.get("/employee/batch/qr-images")
+def download_all_employee_qrs_zip(db: Session = Depends(database.get_db)):
+    employees = db.query(models.Employee).all()
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zf:
+        for e in employees:
+            qr = generate_qr_image(auth.sign_qr_content(e.doc_id))
+            ib = io.BytesIO(); qr.save(ib, format="PNG"); ib.seek(0)
+            zf.writestr(f"{e.doc_id}.png", ib.getvalue())
+    zip_buffer.seek(0)
+    return Response(content=zip_buffer.getvalue(), headers={'Content-Disposition': 'attachment; filename="qrs_empleados.zip"'}, media_type='application/zip')
