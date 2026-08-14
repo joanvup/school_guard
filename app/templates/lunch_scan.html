@@ -210,9 +210,12 @@
 
     rfidInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
-            const code = rfidInput.value;
-            rfidInput.value = '';
-            if (code.trim().length > 0) sendCode(code);
+            e.preventDefault();
+            setTimeout(() => {
+                const code = rfidInput.value;
+                rfidInput.value = '';
+                if (code.trim().length > 0) sendCode(code);
+            }, 50);
         }
     });
 
