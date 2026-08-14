@@ -310,7 +310,7 @@
 
         } else {
             // ERROR / DENEGADO / NO ENCONTRADO
-            lunchTitle.innerText = "ERROR";
+            lunchTitle.innerText = data.status === 'denied' ? "NO AUTORIZADO" : "ERROR";
             bg.className = "border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center transition-colors";
             box.className = "mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg transition-colors";
 

@@ -126,6 +126,9 @@ async def process_lunch(request: Request, db: Session = Depends(database.get_db)
     if not person:
         return JSONResponse(content={"status": "error", "message": "NO ENCONTRADO O NO REGISTRADO"})
 
+    # Pre-calcular info extra (Curso o Cargo) para usarla en las respuestas
+    extra_info = person.course if person_type == 'student' else (person.position or 'Empleado')
+
     # 2. VALIDAR AUTORIZACIÓN DE ALMUERZO
     if not person.has_lunch:
         return JSONResponse(content={
@@ -134,12 +137,10 @@ async def process_lunch(request: Request, db: Session = Depends(database.get_db)
             "person": {
                 "name": person.full_name,
                 "photo": person.photo_path,
-                "type": "Estudiante" if person_type == 'student' else "Empleado"
+                "type": "Estudiante" if person_type == 'student' else "Empleado",
+                "extra": extra_info
             }
         })
-
-    # Pre-calcular info extra (Curso o Cargo) para usarla en las respuestas
-    extra_info = person.course if person_type == 'student' else (person.position or 'Empleado')
     # 3. VERIFICAR DUPLICIDAD (YA COMIÓ HOY?)
     now_co = datetime.now(TZ_COLOMBIA)
     today_date = now_co.date()
