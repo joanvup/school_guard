@@ -106,6 +106,22 @@ async def process_lunch(request: Request, db: Session = Depends(database.get_db)
             ).first()
             if person: person_type = 'employee'
 
+        # Robustez extra: Si la firma no fue válida o el QR es viejo/diferente pero contiene un punto (ID.firma),
+        # extraemos el ID antes del punto y buscamos directamente por ID visual (student_id / doc_id).
+        # Esto garantiza compatibilidad total con lectores físicos sin comprometer el ingreso manual.
+        if not person and "." in raw_code:
+            fallback_id = raw_code.split(".", 1)[0]
+            
+            # Buscar Estudiante
+            person = db.query(models.Student).filter(models.Student.student_id == fallback_id).first()
+            if person:
+                person_type = 'student'
+            else:
+                # Buscar Empleado
+                person = db.query(models.Employee).filter(models.Employee.doc_id == fallback_id).first()
+                if person:
+                    person_type = 'employee'
+
     # SI NO SE ENCUENTRA
     if not person:
         return JSONResponse(content={"status": "error", "message": "NO ENCONTRADO O NO REGISTRADO"})

@@ -70,8 +70,7 @@
         <div class="mb-4 relative">
             <input type="text" id="rfidInput"
                 class="w-full border-2 border-gray-300 rounded p-3 text-lg focus:border-green-500 focus:ring-green-200 focus:outline-none font-mono tracking-widest input-hidden-focus"
-                placeholder="Clic aquí para escanear..." autocomplete="off" inputmode="numeric" pattern="[0-9]*"
-                oninput="this.value = this.value.replace(/[^0-9a-zA-Z.]/g, '')">
+                placeholder="Clic aquí para escanear..." autocomplete="off" inputmode="numeric" pattern="[0-9]*">
             <!-- Permitimos letras por si el RFID es Hexadecimal, si es solo numeros usa: /[^0-9]/g -->
 
             <div class="absolute right-3 top-4 text-gray-400">
@@ -212,10 +211,10 @@
         if (e.key === 'Enter') {
             e.preventDefault();
             setTimeout(() => {
-                const code = rfidInput.value;
+                const code = rfidInput.value.replace(/[^0-9a-zA-Z.]/g, '').trim();
                 rfidInput.value = '';
-                if (code.trim().length > 0) sendCode(code);
-            }, 50);
+                if (code.length > 0) sendCode(code);
+            }, 100);
         }
     });
 
