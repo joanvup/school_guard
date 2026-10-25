@@ -24,14 +24,21 @@
                 <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm font-bold">{{ door.name }}</td>
                 <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">{{ door.description or '-' }}</td>
                 <td class="px-5 py-5 border-b border-gray-200 bg-white text-center">
-                    <a href="/doors/toggle/{{ door.id }}" class="text-xs font-bold px-2 py-1 rounded {{ 'bg-green-200 text-green-800' if door.is_active else 'bg-red-200 text-red-800' }}">
-                        {{ 'ACTIVA' if door.is_active else 'INACTIVA' }}
-                    </a>
+                    <form action="/doors/toggle/{{ door.id }}" method="POST" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                        <button type="submit" class="text-xs font-bold px-2 py-1 rounded {{ 'bg-green-200 text-green-800' if door.is_active else 'bg-red-200 text-red-800' }}">
+                            {{ 'ACTIVA' if door.is_active else 'INACTIVA' }}
+                        </button>
+                    </form>
                 </td>
                 <td class="px-5 py-5 border-b border-gray-200 bg-white text-center">
-                    <a href="/doors/delete/{{ door.id }}" onclick="return confirm('¿Borrar puerta?')" class="text-red-600 hover:text-red-900">
-                        <i class="fas fa-trash"></i>
-                    </a>
+                    <form action="/doors/delete/{{ door.id }}" method="POST" class="inline"
+                        onsubmit="return confirm('¿Borrar puerta?')">
+                        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                        <button type="submit" class="text-red-600 hover:text-red-900">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
                 </td>
             </tr>
             {% endfor %}
@@ -44,6 +51,7 @@
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 class="text-lg font-bold mb-4">Nueva Puerta</h3>
         <form action="/doors/create" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
             <label class="block text-sm font-bold mb-1">Nombre (Único)</label>
             <input class="w-full mb-3 p-2 border rounded" name="name" placeholder="Ej: Puerta Norte" required>
             

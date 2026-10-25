@@ -1,29 +1,51 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
-from .database import engine
-from .routers import auth, dashboard, students, cards, scan, doors, reports, users, employees, lunch
-from . import models, deps
 
-models.Base.metadata.create_all(bind=engine)
+from . import deps
+from .csrf import csrf_cookie_middleware, verify_csrf
+from .routers import (
+    auth,
+    cards,
+    dashboard,
+    doors,
+    employees,
+    lunch,
+    media,
+    reports,
+    scan,
+    students,
+    users,
+)
 
-app = FastAPI(title="School Guard")
+app = FastAPI(title="School Guard", dependencies=[Depends(verify_csrf)])
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+@app.middleware("http")
+async def block_legacy_photo_paths(request: Request, call_next):
+    if request.url.path.startswith("/static/photos"):
+        return Response(status_code=404)
+    return await call_next(request)
+
 
 # Middleware para inyectar el usuario en cada request
 @app.middleware("http")
 async def add_user_to_request(request: Request, call_next):
-    # Usamos la lógica de deps.get_current_user manualmente aquí
-    # para no bloquear rutas públicas, pero tener el usuario si existe.
     from app.database import SessionLocal
+
     db = SessionLocal()
-    user = deps.get_current_user(request, db)
-    request.state.user = user
-    db.close()
-    
-    response = await call_next(request)
-    return response
+    try:
+        user = deps.get_current_user(request, db)
+        request.state.user = user
+    finally:
+        db.close()
+
+    return await call_next(request)
+
+
+app.middleware("http")(csrf_cookie_middleware)
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
@@ -33,11 +55,6 @@ app.include_router(scan.router)
 app.include_router(doors.router)
 app.include_router(reports.router)
 app.include_router(users.router)
-app.include_router(employees.router) 
+app.include_router(employees.router)
 app.include_router(lunch.router)
-
-@app.get("/")
-def root(request: Request):
-    if request.state.user:
-        return RedirectResponse("/dashboard")
-    return RedirectResponse("/login") # Asumiendo que auth.router maneja /login o la raiz
+app.include_router(media.router)

@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["app/routers/dashboard copy.py"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "mysql: requiere una base MySQL real (constraints y concurrencia)",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/routers/dashboard copy.py"]

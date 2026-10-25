@@ -97,7 +97,7 @@
                     <td class="px-5 py-2 border-b border-gray-200 text-sm">
                         <div class="flex-shrink-0 w-10 h-10">
                             {% if e.photo_path %}
-                            <img class="w-full h-full rounded-full object-cover border" src="{{ e.photo_path }}"
+                            <img class="w-full h-full rounded-full object-cover border" src="/media/photos/employees/{{ e.photo_path }}"
                                 onerror="this.src='https://ui-avatars.com/api/?name={{ e.full_name }}'">
                             {% else %}
                             <img class="w-full h-full rounded-full object-cover border"
@@ -111,7 +111,7 @@
                     <td class="px-5 py-2 border-b border-gray-200 text-center text-sm">
                         {% if e.has_lunch %}
                         <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-bold">{{
-                            e.lunch_type.value }}</span>
+                            e.lunch_type }}</span>
                         {% else %}
                         <span class="bg-gray-100 text-gray-400 text-xs px-2 py-1 rounded">No</span>
                         {% endif %}
@@ -136,10 +136,13 @@
                             <i class="fas fa-edit"></i>
                         </button>
                         <!-- Botón Borrar -->
-                        <a href="/employees/delete/{{ e.id }}" onclick="return confirm('¿Borrar?')"
-                            class="text-red-600 hover:text-red-900 mx-1">
-                            <i class="fas fa-trash"></i>
-                        </a>
+                        <form action="/employees/delete/{{ e.id }}" method="POST" class="inline"
+                            onsubmit="return confirm('¿Borrar?')">
+                            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                            <button type="submit" class="text-red-600 hover:text-red-900 mx-1">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
@@ -153,6 +156,7 @@
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 id="modalTitle" class="text-lg font-bold mb-4">Nuevo Empleado</h3>
         <form id="empForm" action="/employees/create" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
             <input type="hidden" name="id" id="empId">
 
             <label class="block text-xs font-bold text-gray-700 mb-1">Cédula</label>
@@ -195,6 +199,7 @@
         <p id="uploadHint" class="text-xs text-gray-500 mb-4 bg-yellow-50 p-2 border-l-2 border-yellow-400">Columnas
             requeridas...</p>
         <form id="uploadForm" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
             <input type="file" name="file" accept=".xlsx, .xls" class="w-full mb-4 p-2 border rounded" required>
             <div class="flex justify-end space-x-2">
                 <button type="button" onclick="document.getElementById('modalUpload').classList.add('hidden')"

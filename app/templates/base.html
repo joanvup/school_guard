@@ -16,7 +16,25 @@
     <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="csrf-token" content="{{ request.state.csrf_token }}">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        (function () {
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            const token = meta ? meta.content : '';
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = function (input, init) {
+                init = init ? { ...init } : {};
+                const method = (init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+                if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+                    const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+                    headers.set('X-CSRF-Token', token);
+                    init.headers = headers;
+                }
+                return originalFetch(input, init);
+            };
+        })();
+    </script>
     <style>
         /* Estilos específicos para móvil si hace falta */
         .nav-link:hover {
@@ -101,9 +119,13 @@
                         <p class="text-xs text-gray-400 uppercase">{{ user.role.value if user.role.value else user.role
                             }}</p>
                     </div>
-                    <a href="/logout" class="block px-4 py-2 text-red-400 hover:text-red-300">
-                        <i class="fas fa-sign-out-alt w-6"></i> Salir
-                    </a>
+                    <form action="/logout" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                        <button type="submit"
+                            class="block w-full text-left px-4 py-2 text-red-400 hover:text-red-300">
+                            <i class="fas fa-sign-out-alt w-6"></i> Salir
+                        </button>
+                    </form>
                 </div>
             </nav>
         </aside>

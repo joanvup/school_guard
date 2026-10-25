@@ -100,6 +100,7 @@
         const card = document.getElementById('result-card');
         const bg = document.getElementById('result-bg');
         const msgBox = document.getElementById('res-message-box');
+        const studentName = data.student ? data.student.name : "Desconocido";
 
         card.classList.remove('hidden');
 
@@ -126,7 +127,7 @@
             document.getElementById('res-time').innerText = "Hora: " + data.timestamp;
 
             try { document.getElementById('audio-success').play(); } catch (e) { }
-            addToLog(data.student.name, data.timestamp, true);
+            addToLog(studentName, data.timestamp, true);
             setTimeout(resetScanner, 3000);
         }
         else if (data.status === 'denied') {
@@ -136,7 +137,7 @@
             document.getElementById('res-time').innerText = "";
 
             try { document.getElementById('audio-error').play(); } catch (e) { }
-            addToLog(data.student.name, "DENEGADO", false);
+            addToLog(studentName, "DENEGADO", false);
         }
         else if (data.status === 'warning') {
             // NUEVO: ADVERTENCIA / YA SALIÓ (Naranja/Amarillo)
@@ -146,7 +147,7 @@
 
             // Usamos sonido de error para alertar
             try { document.getElementById('audio-error').play(); } catch (e) { }
-            addToLog(data.student.name, "DUPLICADO", false);
+            addToLog(studentName, "DUPLICADO", false);
         }
         else {
             // ERROR / NO ENCONTRADO (Amarillo suave)

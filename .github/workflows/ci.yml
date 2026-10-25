@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: school_guard
+          MYSQL_USER: school_guard
+          MYSQL_PASSWORD: school_guard
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: mysql+pymysql://school_guard:school_guard@127.0.0.1:3306/school_guard?charset=utf8mb4
+      SECRET_KEY: ci-secret-key-not-for-production
+      QR_SECRET_KEY_CURRENT: ci-qr-key-current
+      QR_SECRET_KEY_PREVIOUS: ci-qr-key-previous
+      COOKIE_SECURE: "false"
+      BOOTSTRAP_ADMIN_PASSWORD: ci-bootstrap-password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Migrations against MySQL 8
+        run: |
+          alembic upgrade head
+          alembic check
+
+      - name: Tests
+        # Los tests usan SQLite; el umbral de 50 % es la base de Release 1
+        # y sube a 70 % / 80 % en los módulos críticos al cerrar la Fase 6.
+        run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=50
+
+      - name: Dependency audit
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt

@@ -94,6 +94,7 @@
 
         <!-- Formulario -->
         <form action="/login" method="POST" class="space-y-6">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
 
             <!-- Input Usuario -->
             <div class="relative">

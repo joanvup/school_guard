@@ -4,7 +4,7 @@ import requests
 # Configuración
 LIBS = {
     "chart.min.js": "https://cdn.jsdelivr.net/npm/chart.js",
-    "html5-qrcode.min.js": "https://unpkg.com/html5-qrcode/html5-qrcode.min.js"
+    "html5-qrcode.min.js": "https://unpkg.com/html5-qrcode/html5-qrcode.min.js",
 }
 OUTPUT_JS = "app/static/js"
 
@@ -18,7 +18,7 @@ for filename, url in LIBS.items():
     try:
         r = requests.get(url)
         if r.status_code == 200:
-            with open(os.path.join(OUTPUT_JS, filename), 'wb') as f:
+            with open(os.path.join(OUTPUT_JS, filename), "wb") as f:
                 f.write(r.content)
             print("   OK.")
         else:

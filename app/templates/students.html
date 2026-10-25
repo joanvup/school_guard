@@ -124,7 +124,7 @@
                         <div class="flex-shrink-0 w-10 h-10">
                             {% if s.photo_path %}
                             <img class="w-full h-full rounded-full object-cover border border-gray-300"
-                                src="{{ s.photo_path }}"
+                                src="/media/photos/students/{{ s.photo_path }}"
                                 onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name={{ s.full_name }}&background=random';">
                             {% else %}
                             <img class="w-full h-full rounded-full object-cover border border-gray-300"
@@ -139,15 +139,18 @@
 
                     <!-- COLUMNA SALIDA (Interactiva) -->
                     <td class="px-5 py-2 border-b border-gray-200 text-sm text-center">
-                        <a href="/students/toggle_auth/{{ s.id }}"
-                            class="relative inline-block px-3 py-1 font-semibold leading-tight cursor-pointer group">
-                            <span aria-hidden="true"
-                                class="absolute inset-0 {{ 'bg-green-200 group-hover:bg-green-300' if s.is_authorized else 'bg-red-200 group-hover:bg-red-300' }} opacity-50 rounded-full transition-colors"></span>
-                            <span
-                                class="relative text-xs {{ 'text-green-900' if s.is_authorized else 'text-red-900' }}">
-                                {{ 'AUTORIZADO' if s.is_authorized else 'NO SALE' }}
-                            </span>
-                        </a>
+                        <form action="/students/toggle_auth/{{ s.id }}" method="POST" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                            <button type="submit"
+                                class="relative inline-block px-3 py-1 font-semibold leading-tight cursor-pointer group">
+                                <span aria-hidden="true"
+                                    class="absolute inset-0 {{ 'bg-green-200 group-hover:bg-green-300' if s.is_authorized else 'bg-red-200 group-hover:bg-red-300' }} opacity-50 rounded-full transition-colors"></span>
+                                <span
+                                    class="relative text-xs {{ 'text-green-900' if s.is_authorized else 'text-red-900' }}">
+                                    {{ 'AUTORIZADO' if s.is_authorized else 'NO SALE' }}
+                                </span>
+                            </button>
+                        </form>
                     </td>
 
                     <!-- COLUMNA ALMUERZO (Informativa) -->
@@ -176,9 +179,13 @@
                         <a href="/cards/pdf/{{ s.student_id }}" target="_blank"
                             class="text-blue-600 hover:text-blue-900 mx-1" title="Carnet PDF"><i
                                 class="fas fa-id-card"></i></a>
-                        <a href="/students/delete/{{ s.id }}" onclick="return confirm('¿Eliminar estudiante?')"
-                            class="text-red-600 hover:text-red-900 mx-1" title="Eliminar"><i
-                                class="fas fa-trash"></i></a>
+                        <form action="/students/delete/{{ s.id }}" method="POST" class="inline"
+                            onsubmit="return confirm('¿Eliminar estudiante?')">
+                            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                            <button type="submit" class="text-red-600 hover:text-red-900 mx-1" title="Eliminar">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
                     </td>
                 </tr>
                 {% else %}
@@ -236,6 +243,7 @@
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 class="text-lg font-bold mb-4">Nuevo Estudiante</h3>
         <form action="/students/create" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
             <input class="w-full mb-3 p-2 border rounded" name="student_id" placeholder="ID / Carnet" required>
             <input class="w-full mb-3 p-2 border rounded" name="full_name" placeholder="Nombre Completo" required>
             <input class="w-full mb-3 p-2 border rounded" name="course" placeholder="Curso (ej. 11A)" required>
@@ -260,6 +268,7 @@
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 class="text-lg font-bold mb-4">Importar Excel</h3>
         <form action="/students/import" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
             <p class="text-xs text-gray-500 mb-2">Columnas: ID, Nombre, Curso, Autorizado</p>
             <input type="file" name="file" accept=".xlsx, .xls" class="w-full mb-4 p-2 border rounded" required>
             <div class="flex justify-end space-x-2">
@@ -275,6 +284,7 @@
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 class="text-lg font-bold mb-4">Importar Fotos (ZIP)</h3>
         <form action="/students/import-photos" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
             <div class="bg-yellow-50 border-l-4 border-yellow-400 p-2 mb-4">
                 <p class="text-xs text-yellow-700">
                     El nombre de la imagen debe ser el ID del estudiante (ej: <code>202301.jpg</code>).
@@ -296,6 +306,7 @@
         <p id="uploadHint" class="text-xs text-gray-500 mb-4 bg-yellow-50 p-2 border-l-2 border-yellow-400">Columnas
             requeridas...</p>
         <form id="uploadForm" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
             <input type="file" name="file" accept=".xlsx, .xls" class="w-full mb-4 p-2 border rounded" required>
             <div class="flex justify-end space-x-2">
                 <button type="button" onclick="document.getElementById('modalUpload').classList.add('hidden')"

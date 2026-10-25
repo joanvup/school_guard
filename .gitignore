@@ -6,6 +6,12 @@ venv/
 env/
 .env
 
+# Herramientas de calidad
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+
 # Datos sensibles y Archivos generados
 *.pdf
 *.zip
@@ -14,8 +20,10 @@ env/
 # Archivos multimedia de usuarios (pero mantenemos la estructura de carpetas)
 app/static/photos/*
 !app/static/photos/.gitkeep
+app/data/photos/
 app/static/icons/*
 !app/static/icons/.gitkeep
+_migration_test.db
 
 # VS Code
 .vscode/

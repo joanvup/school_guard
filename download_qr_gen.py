@@ -10,7 +10,7 @@ if not os.path.exists("app/static/js"):
 print("Descargando qrcode.min.js...")
 try:
     r = requests.get(URL)
-    with open(DEST, 'wb') as f:
+    with open(DEST, "wb") as f:
         f.write(r.content)
     print("¡Descarga exitosa!")
 except Exception as e:
