@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket {{ ticket.number }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace;
+            background: #f3f4f6;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            padding: 12px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .toolbar button {
+            border: 0;
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .toolbar .primary {
+            background: #16a34a;
+            color: #ffffff;
+        }
+
+        .toolbar .secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .ticket {
+            width: 72mm;
+            margin: 12px auto;
+            padding: 2mm;
+            text-align: center;
+            background: #ffffff;
+            color: #000000;
+        }
+
+        .title {
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 9px;
+            margin-bottom: 4px;
+        }
+
+        .divider {
+            border-top: 1px dashed #000000;
+            margin: 5px 0;
+        }
+
+        .lunch-type {
+            font-size: 18px;
+            font-weight: 900;
+            margin: 8px 0;
+        }
+
+        .number {
+            font-size: 9px;
+            margin-bottom: 4px;
+        }
+
+        .name {
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .extra {
+            font-size: 10px;
+            margin-top: 2px;
+        }
+
+        .datetime {
+            font-size: 9px;
+            margin-top: 8px;
+        }
+
+        .qr {
+            display: flex;
+            justify-content: center;
+            margin-top: 8px;
+        }
+
+        @media print {
+            body {
+                background: #ffffff;
+            }
+
+            .toolbar {
+                display: none;
+            }
+
+            .ticket {
+                margin: 0;
+            }
+
+            @page {
+                size: 75mm auto;
+                margin: 0mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button type="button" class="primary" onclick="window.print()">Imprimir</button>
+        <button type="button" class="secondary" onclick="window.close()">Cerrar</button>
+    </div>
+
+    <div class="ticket">
+        <div class="title">COLEGIO BILINGÜE</div>
+        <div class="subtitle">CONTROL DE ALIMENTACIÓN</div>
+        <div class="divider"></div>
+
+        <div class="lunch-type">{{ ticket.lunch_type|upper }}</div>
+        <div class="number">No. {{ ticket.number }}</div>
+        <div class="name">{{ ticket.name }}</div>
+        <div class="extra">{{ ticket.extra }}</div>
+        <div class="extra">{{ ticket.person_type }}</div>
+
+        <div class="datetime">{{ ticket.date }} - {{ ticket.time }}</div>
+
+        <div class="qr" id="ticket-qr"></div>
+    </div>
+
+    <script src="/static/js/qrcode.min.js"></script>
+    <script>
+        const qrContainer = document.getElementById('ticket-qr');
+        try {
+            new QRCode(qrContainer, {
+                text: {{ ticket.qr|tojson }},
+                width: 128,
+                height: 128,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        } catch (error) {
+            qrContainer.innerText = 'QR no disponible';
+        }
+
+        window.addEventListener('load', () => {
+            setTimeout(() => window.print(), 350);
+        });
+    </script>
+</body>
+</html>

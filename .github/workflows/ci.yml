@@ -28,6 +28,7 @@ jobs:
     env:
       APP_ENV: test
       DATABASE_URL: mysql+pymysql://school_guard:school_guard@127.0.0.1:3306/school_guard?charset=utf8mb4
+      MYSQL_TEST_URL: mysql+pymysql://school_guard:school_guard@127.0.0.1:3306/school_guard?charset=utf8mb4
       SECRET_KEY: ci-secret-key-not-for-production
       QR_SECRET_KEY_CURRENT: ci-qr-key-current
       QR_SECRET_KEY_PREVIOUS: ci-qr-key-previous
@@ -57,8 +58,9 @@ jobs:
           alembic check
 
       - name: Tests
-        # Los tests usan SQLite; el umbral de 50 % es la base de Release 1
-        # y sube a 70 % / 80 % en los módulos críticos al cerrar la Fase 6.
+        # Los unitarios usan SQLite; los marcados "mysql" validan constraints y
+        # concurrencia contra el servicio MySQL 8 ya migrado.
+        # El umbral sube a 70 % / 80 % en los módulos críticos al cerrar la Fase 6.
         run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=50
 
       - name: Dependency audit

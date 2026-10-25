@@ -6,9 +6,10 @@
         <h2 class="text-2xl font-bold text-gray-800"><i class="fas fa-utensils mr-2 text-green-600"></i> Dashboard Comedor</h2>
         <div class="flex items-center mt-1">
             <span class="text-gray-500 mr-2">Fecha:</span>
-            <input type="date" id="datePicker" value="{{ today_date }}" 
+            <input type="date" id="datePicker" value="{{ today_date }}"
                    class="border rounded p-1 text-gray-700 font-bold bg-white shadow-sm focus:ring focus:ring-green-200">
         </div>
+        <p id="dashboard-error" class="hidden mt-2 text-sm text-red-600"></p>
     </div>
     <button onclick="updateDashboard()" class="text-green-600 hover:text-green-800 text-sm font-semibold">
         <i class="fas fa-sync-alt mr-1"></i> Refrescar
@@ -17,8 +18,6 @@
 
 <!-- KPIs -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    
-    <!-- TOTAL -->
     <div onclick="openDetailsModal('all')" class="bg-white rounded-lg shadow p-5 border-l-4 border-gray-600 cursor-pointer hover:bg-gray-50 transition transform hover:scale-105">
         <div class="flex items-center justify-between">
             <div class="flex items-center">
@@ -35,7 +34,6 @@
         </div>
     </div>
 
-    <!-- NORMAL -->
     <div onclick="openDetailsModal('Normal')" class="bg-white rounded-lg shadow p-5 border-l-4 border-green-500 cursor-pointer hover:bg-green-50 transition transform hover:scale-105">
         <div class="flex items-center justify-between">
             <div class="flex items-center">
@@ -49,7 +47,6 @@
         </div>
     </div>
 
-    <!-- ESPECIAL -->
     <div onclick="openDetailsModal('Especial')" class="bg-white rounded-lg shadow p-5 border-l-4 border-purple-500 cursor-pointer hover:bg-purple-50 transition transform hover:scale-105">
         <div class="flex items-center justify-between">
             <div class="flex items-center">
@@ -106,27 +103,46 @@
 
 <script src="/static/js/chart.min.js"></script>
 <script>
-    let chart1 = null, chart2 = null;
+    const AVATAR_PLACEHOLDER = '/static/assets/avatar.png';
+    let chart1 = null;
+    let chart2 = null;
+
+    function showDashboardError(message) {
+        const box = document.getElementById('dashboard-error');
+        box.innerText = message;
+        box.classList.remove('hidden');
+    }
 
     async function updateDashboard() {
         const date = document.getElementById('datePicker').value;
-        
-        // Stats
-        try {
-            const res = await fetch(`/api/dashboard/lunch/stats?date=${date}`);
-            const stats = await res.json();
-            document.getElementById('kpi-total').innerText = stats.total;
-            document.getElementById('kpi-normal').innerText = stats.normal;
-            document.getElementById('kpi-special').innerText = stats.special;
-            document.getElementById('kpi-est').innerText = stats.by_person.students;
-            document.getElementById('kpi-emp').innerText = stats.by_person.employees;
-        } catch(e) { console.error(e); }
+        document.getElementById('dashboard-error').classList.add('hidden');
 
-        // Charts
         try {
-            const res = await fetch(`/api/dashboard/lunch/chart-data?date=${date}`);
-            const data = await res.json();
-            
+            const { response, data: stats } = await apiFetch(
+                `/api/dashboard/lunch/stats?date=${encodeURIComponent(date)}`
+            );
+            if (!response.ok) {
+                showDashboardError(apiErrorMessage(data, 'No fue posible cargar las estadísticas.'));
+            } else {
+                document.getElementById('kpi-total').innerText = stats.total;
+                document.getElementById('kpi-normal').innerText = stats.normal;
+                document.getElementById('kpi-special').innerText = stats.special;
+                document.getElementById('kpi-est').innerText = stats.by_person.students;
+                document.getElementById('kpi-emp').innerText = stats.by_person.employees;
+            }
+        } catch (error) {
+            showDashboardError('No fue posible cargar las estadísticas.');
+        }
+
+        try {
+            const { response, data } = await apiFetch(
+                `/api/dashboard/lunch/chart-data?date=${encodeURIComponent(date)}`
+            );
+            if (!response.ok) {
+                showDashboardError(apiErrorMessage(data, 'No fue posible cargar las gráficas.'));
+                return;
+            }
+
             if (chart1) chart1.destroy();
             if (chart2) chart2.destroy();
 
@@ -147,46 +163,105 @@
                 },
                 options: { maintainAspectRatio: false }
             });
-        } catch(e) { console.error(e); }
+        } catch (error) {
+            showDashboardError('No fue posible cargar las gráficas.');
+        }
     }
 
-    // Modal
     const modal = document.getElementById('detailModal');
-    function openDetailsModal(type) {
+    const modalContent = document.getElementById('modalContent');
+    const modalTable = document.getElementById('modalTable');
+    const modalLoader = document.getElementById('modalLoader');
+    const modalEmpty = document.getElementById('modalEmpty');
+
+    function buildDetailRow(item) {
+        const row = document.createElement('tr');
+        row.className = 'border-b hover:bg-gray-50';
+
+        const personCell = document.createElement('td');
+        personCell.className = 'px-4 py-2 flex items-center gap-3';
+
+        if (item.photo) {
+            const img = document.createElement('img');
+            img.src = item.photo;
+            img.alt = item.name;
+            img.className = 'w-8 h-8 rounded-full border bg-gray-100';
+            img.onerror = () => { img.onerror = null; img.src = AVATAR_PLACEHOLDER; };
+            personCell.appendChild(img);
+        } else {
+            const initials = document.createElement('div');
+            initials.className = 'w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-500';
+            initials.innerText = (item.name || '?').substring(0, 1);
+            personCell.appendChild(initials);
+        }
+
+        const name = document.createElement('span');
+        name.className = 'font-bold text-sm';
+        name.innerText = item.name;
+        personCell.appendChild(name);
+
+        const extraCell = document.createElement('td');
+        extraCell.className = 'px-4 py-2 text-sm text-gray-600';
+        extraCell.innerText = item.extra || '';
+
+        const timeCell = document.createElement('td');
+        timeCell.className = 'px-4 py-2 text-sm font-mono font-bold';
+        timeCell.innerText = item.time || '';
+
+        const typeCell = document.createElement('td');
+        typeCell.className = 'px-4 py-2 text-center';
+        const badge = document.createElement('span');
+        badge.className = item.type === 'Normal'
+            ? 'bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold'
+            : 'bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold';
+        badge.innerText = item.type || '';
+        typeCell.appendChild(badge);
+
+        row.appendChild(personCell);
+        row.appendChild(extraCell);
+        row.appendChild(timeCell);
+        row.appendChild(typeCell);
+        return row;
+    }
+
+    async function openDetailsModal(type) {
         const date = document.getElementById('datePicker').value;
         modal.classList.remove('hidden');
         document.getElementById('modalTitle').innerText = `Detalle: ${type}`;
-        document.getElementById('modalContent').innerHTML = '';
-        document.getElementById('modalLoader').classList.remove('hidden');
-        document.getElementById('modalTable').classList.add('hidden');
-        document.getElementById('modalEmpty').classList.add('hidden');
+        modalContent.replaceChildren();
+        modalLoader.classList.remove('hidden');
+        modalTable.classList.add('hidden');
+        modalEmpty.classList.add('hidden');
 
-        fetch(`/api/dashboard/lunch/details?type=${type}&date=${date}`)
-            .then(r => r.json())
-            .then(data => {
-                document.getElementById('modalLoader').classList.add('hidden');
-                if(data.length === 0) {
-                    document.getElementById('modalEmpty').classList.remove('hidden');
-                } else {
-                    document.getElementById('modalTable').classList.remove('hidden');
-                    data.forEach(item => {
-                        let avatar = item.photo ? `<img src="${item.photo}" class="w-8 h-8 rounded-full border">` : `<div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-500">${item.name.substr(0,1)}</div>`;
-                        let color = item.type === 'Normal' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800';
-                        
-                        document.getElementById('modalContent').innerHTML += `
-                        <tr class="border-b hover:bg-gray-50">
-                            <td class="px-4 py-2 flex items-center gap-3">${avatar} <span class="font-bold text-sm">${item.name}</span></td>
-                            <td class="px-4 py-2 text-sm text-gray-600">${item.extra}</td>
-                            <td class="px-4 py-2 text-sm font-mono font-bold">${item.time}</td>
-                            <td class="px-4 py-2 text-center"><span class="${color} px-2 py-1 rounded text-xs font-bold">${item.type}</span></td>
-                        </tr>`;
-                    });
-                }
-            });
+        try {
+            const { response, data } = await apiFetch(
+                `/api/dashboard/lunch/details?type=${encodeURIComponent(type)}&date=${encodeURIComponent(date)}`
+            );
+            modalLoader.classList.add('hidden');
+            if (!response.ok) {
+                modalEmpty.innerText = apiErrorMessage(data, 'No fue posible cargar el detalle.');
+                modalEmpty.classList.remove('hidden');
+                return;
+            }
+            if (!Array.isArray(data) || data.length === 0) {
+                modalEmpty.innerText = 'Sin registros.';
+                modalEmpty.classList.remove('hidden');
+                return;
+            }
+            modalTable.classList.remove('hidden');
+            data.forEach((item) => modalContent.appendChild(buildDetailRow(item)));
+        } catch (error) {
+            modalLoader.classList.add('hidden');
+            modalEmpty.innerText = 'No fue posible cargar el detalle.';
+            modalEmpty.classList.remove('hidden');
+        }
     }
 
-    function closeModal() { modal.classList.add('hidden'); }
-    modal.addEventListener('click', e => { if(e.target === modal) closeModal(); });
+    function closeModal() {
+        modal.classList.add('hidden');
+    }
+
+    modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
     document.getElementById('datePicker').addEventListener('change', updateDashboard);
     document.addEventListener('DOMContentLoaded', updateDashboard);
 </script>

@@ -16,6 +16,17 @@ def today_local() -> date:
     return now_local().date()
 
 
+def localize(value: datetime) -> datetime:
+    """Normaliza un datetime de BD (a menudo naive) a la zona local."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=LOCAL_TZ)
+    return value.astimezone(LOCAL_TZ)
+
+
+def day_range(target_date: date) -> tuple[datetime, datetime]:
+    return datetime.combine(target_date, time.min), datetime.combine(target_date, time.max)
+
+
 def parse_date(value: str | None) -> date:
     if not value:
         return today_local()
@@ -23,7 +34,7 @@ def parse_date(value: str | None) -> date:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Fecha inválida; use el formato AAAA-MM-DD",
         )
 
@@ -35,7 +46,7 @@ def day_bounds(
     end_date = parse_date(date_end)
     if end_date < start_date:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="La fecha final no puede ser anterior a la inicial",
         )
     return (

@@ -1,3 +1,4 @@
+from datetime import time as dt_time
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -38,6 +39,12 @@ class Settings(BaseSettings):
     login_max_attempts: int = Field(default=5, alias="LOGIN_MAX_ATTEMPTS", ge=1, le=100)
     login_lockout_minutes: int = Field(default=5, alias="LOGIN_LOCKOUT_MINUTES", ge=1, le=1440)
 
+    lunch_window_start: str = Field(default="11:00", alias="LUNCH_WINDOW_START")
+    lunch_window_end: str = Field(default="14:00", alias="LUNCH_WINDOW_END")
+    lunch_window_enforcement: Literal["off", "warn", "deny"] = Field(
+        default="off", alias="LUNCH_WINDOW_ENFORCEMENT"
+    )
+
     bootstrap_admin_password: str | None = Field(default=None, alias="BOOTSTRAP_ADMIN_PASSWORD")
     media_photos_dir: Path = Field(
         default=BASE_DIR / "app" / "data" / "photos", alias="MEDIA_PHOTOS_DIR"
@@ -72,6 +79,15 @@ class Settings(BaseSettings):
             raise ValueError("ALGORITHM debe ser HS256")
         return value
 
+    @field_validator("lunch_window_start", "lunch_window_end")
+    @classmethod
+    def _validate_window_time(cls, value: str) -> str:
+        try:
+            dt_time.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("La ventana de almuerzo debe usar HH:MM") from exc
+        return value
+
     @model_validator(mode="after")
     def _validate_rotation(self) -> "Settings":
         if (
@@ -79,7 +95,17 @@ class Settings(BaseSettings):
             and self.qr_secret_key_previous == self.qr_secret_key_current
         ):
             raise ValueError("QR_SECRET_KEY_PREVIOUS debe ser distinta de QR_SECRET_KEY_CURRENT")
+        if dt_time.fromisoformat(self.lunch_window_start) >= dt_time.fromisoformat(
+            self.lunch_window_end
+        ):
+            raise ValueError("LUNCH_WINDOW_START debe ser anterior a LUNCH_WINDOW_END")
         return self
+
+    @property
+    def lunch_window_times(self) -> tuple[dt_time, dt_time]:
+        return dt_time.fromisoformat(self.lunch_window_start), dt_time.fromisoformat(
+            self.lunch_window_end
+        )
 
     @property
     def cookie_secure_effective(self) -> bool:

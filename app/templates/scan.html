@@ -18,11 +18,12 @@
     <!-- Área de Cámara -->
     <div class="bg-black rounded-lg overflow-hidden shadow-xl relative" style="min-height: 300px;">
         <div id="reader" class="w-full h-full"></div>
-        <!-- Overlay de carga -->
         <div id="camera-loading" class="absolute inset-0 flex items-center justify-center text-white">
             <i class="fas fa-circle-notch fa-spin fa-2x"></i>
         </div>
     </div>
+    <p id="camera-error" class="hidden mt-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2"></p>
+    <p id="connection-error" class="hidden mt-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2"></p>
 
     <!-- Área de Resultados -->
     <div id="result-card" class="mt-6 hidden transition-all duration-300">
@@ -30,7 +31,8 @@
 
             <!-- Foto -->
             <div class="flex justify-center mb-4">
-                <img id="res-photo" src="" class="w-24 h-24 rounded-full object-cover border-4 border-white shadow-sm">
+                <img id="res-photo" src="/static/assets/avatar.png" alt="Foto del estudiante"
+                    class="w-24 h-24 rounded-full object-cover border-4 border-white shadow-sm bg-gray-100">
             </div>
 
             <!-- Datos -->
@@ -60,100 +62,121 @@
 
 </div>
 
-<!-- Sonidos -->
-<audio id="audio-success" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
-<audio id="audio-error" src="https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg"></audio>
-
 <!-- Librería QR Local -->
 <script src="/static/js/html5-qrcode.min.js"></script>
 
 <script>
+    const PLACEHOLDER_PHOTO = '/static/assets/avatar.png';
     let isProcessing = false;
     let html5QrcodeScanner = null;
 
-    function onScanSuccess(decodedText, decodedResult) {
-        if (isProcessing) return; // Evitar doble lectura
+    function showConnectionError(message) {
+        const box = document.getElementById('connection-error');
+        box.innerText = message;
+        box.classList.remove('hidden');
+    }
+
+    function clearConnectionError() {
+        document.getElementById('connection-error').classList.add('hidden');
+    }
+
+    function showCameraError(message) {
+        const box = document.getElementById('camera-error');
+        box.innerText = message;
+        box.classList.remove('hidden');
+    }
+
+    function onScanSuccess(decodedText) {
+        if (isProcessing) return;
         isProcessing = true;
+        clearConnectionError();
 
-        // Sonido "beep" corto al detectar
-        // (Opcional, los navegadores a veces bloquean audio sin interacción)
+        const doorId = Number(document.getElementById('doorSelect').value);
 
-        // Enviar al backend
-        fetch('/scan/process', {
+        apiFetch('/scan/process', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                qr_code: decodedText,
-                door_id: document.getElementById('doorSelect').value
-            })
+            body: JSON.stringify({ qr_code: decodedText, door_id: doorId })
         })
-            .then(response => response.json())
-            .then(data => showResult(data))
-            .catch(err => {
-                console.error(err);
-                alert("Error de conexión");
+            .then(({ response, data }) => {
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (!response.ok && !data) {
+                    showConnectionError(apiErrorMessage(data, `Error del servidor (${response.status})`));
+                    isProcessing = false;
+                    return;
+                }
+                showResult(data);
+            })
+            .catch((error) => {
+                const message = error.name === 'AbortError'
+                    ? 'El servidor tardó demasiado en responder. Verifique la conexión.'
+                    : 'No fue posible conectar con el servidor.';
+                showConnectionError(message);
                 isProcessing = false;
             });
     }
 
+    function setPhoto(photoUrl) {
+        const img = document.getElementById('res-photo');
+        img.src = photoUrl || PLACEHOLDER_PHOTO;
+        img.onerror = () => { img.onerror = null; img.src = PLACEHOLDER_PHOTO; };
+    }
+
     function showResult(data) {
+        if (!data || typeof data !== 'object') {
+            showConnectionError('Respuesta inválida del servidor.');
+            isProcessing = false;
+            return;
+        }
+
         const card = document.getElementById('result-card');
         const bg = document.getElementById('result-bg');
         const msgBox = document.getElementById('res-message-box');
-        const studentName = data.student ? data.student.name : "Desconocido";
+        const studentName = data.student ? data.student.name : 'Desconocido';
 
         card.classList.remove('hidden');
 
-        // Datos del estudiante
         if (data.student) {
             document.getElementById('res-name').innerText = data.student.name;
             document.getElementById('res-course').innerText = data.student.course;
-            let photoSrc = data.student.photo ? data.student.photo : `https://ui-avatars.com/api/?name=${data.student.name}`;
-            document.getElementById('res-photo').src = photoSrc;
+            setPhoto(data.student.photo);
         } else {
-            document.getElementById('res-name').innerText = "Desconocido";
-            document.getElementById('res-course').innerText = "---";
-            document.getElementById('res-photo').src = "https://ui-avatars.com/api/?name=Unknown";
+            document.getElementById('res-name').innerText = 'Desconocido';
+            document.getElementById('res-course').innerText = '---';
+            setPhoto(null);
         }
 
-        msgBox.innerText = data.message;
-
-        // --- MANEJO DE ESTADOS ---
+        msgBox.innerText = data.message || '';
+        document.getElementById('res-time').innerText = '';
 
         if (data.status === 'success') {
-            // ÉXITO (Verde)
-            bg.className = "rounded-lg shadow-lg p-6 text-center border-4 border-green-500 bg-green-50";
-            msgBox.className = "py-2 px-4 rounded bg-green-600 text-white font-bold text-lg uppercase tracking-wide";
-            document.getElementById('res-time').innerText = "Hora: " + data.timestamp;
-
-            try { document.getElementById('audio-success').play(); } catch (e) { }
-            addToLog(studentName, data.timestamp, true);
+            bg.className = 'rounded-lg shadow-lg p-6 text-center border-4 border-green-500 bg-green-50';
+            msgBox.className = 'py-2 px-4 rounded bg-green-600 text-white font-bold text-lg uppercase tracking-wide';
+            document.getElementById('res-time').innerText = 'Hora: ' + (data.timestamp || '');
+            playFeedbackSound(true);
+            addToLog(studentName, data.timestamp || '', true);
             setTimeout(resetScanner, 3000);
-        }
-        else if (data.status === 'denied') {
-            // DENEGADO (Rojo)
-            bg.className = "rounded-lg shadow-lg p-6 text-center border-4 border-red-600 bg-red-50";
-            msgBox.className = "py-2 px-4 rounded bg-red-600 text-white font-bold text-2xl uppercase tracking-wide animate-pulse";
-            document.getElementById('res-time').innerText = "";
-
-            try { document.getElementById('audio-error').play(); } catch (e) { }
-            addToLog(studentName, "DENEGADO", false);
-        }
-        else if (data.status === 'warning') {
-            // NUEVO: ADVERTENCIA / YA SALIÓ (Naranja/Amarillo)
-            bg.className = "rounded-lg shadow-lg p-6 text-center border-4 border-orange-500 bg-orange-50";
-            msgBox.className = "py-2 px-4 rounded bg-orange-500 text-white font-bold text-xl uppercase tracking-wide";
-            document.getElementById('res-time').innerText = "Registro duplicado bloqueado";
-
-            // Usamos sonido de error para alertar
-            try { document.getElementById('audio-error').play(); } catch (e) { }
-            addToLog(studentName, "DUPLICADO", false);
-        }
-        else {
-            // ERROR / NO ENCONTRADO (Amarillo suave)
-            bg.className = "rounded-lg shadow-lg p-6 text-center border-4 border-yellow-500 bg-yellow-50";
-            msgBox.className = "py-2 px-4 rounded bg-yellow-600 text-white font-bold text-lg uppercase";
-            addToLog("ID: " + data.message, "ERROR", false);
+        } else if (data.status === 'denied') {
+            bg.className = 'rounded-lg shadow-lg p-6 text-center border-4 border-red-600 bg-red-50';
+            msgBox.className = 'py-2 px-4 rounded bg-red-600 text-white font-bold text-2xl uppercase tracking-wide animate-pulse';
+            playFeedbackSound(false);
+            addToLog(studentName, 'DENEGADO', false);
+        } else if (data.status === 'warning') {
+            bg.className = 'rounded-lg shadow-lg p-6 text-center border-4 border-orange-500 bg-orange-50';
+            msgBox.className = 'py-2 px-4 rounded bg-orange-500 text-white font-bold text-xl uppercase tracking-wide';
+            document.getElementById('res-time').innerText = data.previous_timestamp
+                ? 'Salida anterior: ' + data.previous_timestamp
+                : 'Registro duplicado bloqueado';
+            playFeedbackSound(false);
+            addToLog(studentName, 'DUPLICADO', false);
+        } else {
+            bg.className = 'rounded-lg shadow-lg p-6 text-center border-4 border-yellow-500 bg-yellow-50';
+            msgBox.className = 'py-2 px-4 rounded bg-yellow-600 text-white font-bold text-lg uppercase';
+            playFeedbackSound(false);
+            addToLog(studentName, 'ERROR', false);
         }
     }
 
@@ -165,31 +188,34 @@
     function addToLog(name, time, success) {
         const list = document.getElementById('scan-log');
         const li = document.createElement('li');
-        li.className = success ? "text-green-700" : "text-red-600 font-bold";
+        li.className = success ? 'text-green-700' : 'text-red-600 font-bold';
         li.innerText = `[${time}] ${name}`;
         list.insertBefore(li, list.firstChild);
     }
 
-    // Iniciar cámara
     function onScanFailure(error) {
-        // handle scan failure, usually better to ignore and keep scanning.
+        // La librería reporta cada frame sin QR; no es un error de cámara.
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            showCameraError('Este navegador no permite usar la cámara. Use la búsqueda manual o un lector externo.');
+            document.getElementById('camera-loading').classList.add('hidden');
+            return;
+        }
+
         html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader",
+            'reader',
             { fps: 10, qrbox: { width: 250, height: 250 } },
-            /* verbose= */ false
+            false
         );
         html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 
-        // Ocultar loader cuando cargue (esto es un truco visual, la librería maneja su propio UI)
         setTimeout(() => document.getElementById('camera-loading').classList.add('hidden'), 1000);
     });
 </script>
 
 <style>
-    /* Ajustes para la librería de QR para que se vea más limpia */
     #reader__scan_region {
         background: white;
     }

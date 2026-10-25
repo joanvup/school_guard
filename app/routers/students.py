@@ -10,6 +10,7 @@ import shutil
 import zipfile
 from .. import database, models, deps
 from ..config import settings
+from ..services.audit import add_audit
 from ..utils.data import clean_text, normalize_excel_id, normalize_rfid
 from starlette.requests import Request
 import math
@@ -155,10 +156,24 @@ def delete_student(id: int, db: Session = Depends(database.get_db)):
 
 
 @router.post("/toggle_auth/{id}")
-def toggle_auth(id: int, db: Session = Depends(database.get_db)):
+def toggle_auth(id: int, request: Request, db: Session = Depends(database.get_db)):
     student = db.query(models.Student).filter(models.Student.id == id).first()
     if student:
-        student.is_authorized = not student.is_authorized
+        previous = bool(student.is_authorized)
+        student.is_authorized = not previous
+        add_audit(
+            db,
+            action="student.authorization_changed",
+            actor_id=request.state.user.id,
+            entity_type="student",
+            entity_id=student.id,
+            details={
+                "student_id": student.student_id,
+                "previous": previous,
+                "new": bool(student.is_authorized),
+            },
+            request=request,
+        )
         db.commit()
     return RedirectResponse(url="/students", status_code=303)
 
@@ -182,7 +197,9 @@ def download_template():
 
 
 @router.post("/import")
-def import_students(file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+def import_students(
+    request: Request, file: UploadFile = File(...), db: Session = Depends(database.get_db)
+):
     if not file.filename.endswith((".xls", ".xlsx")):
         return RedirectResponse(url="/students?error=Formato+invalido", status_code=303)
 
@@ -213,13 +230,20 @@ def import_students(file: UploadFile = File(...), db: Session = Depends(database
                 db.add(new_student)
             count += 1
 
+        add_audit(
+            db,
+            action="students.imported",
+            actor_id=request.state.user.id,
+            entity_type="student",
+            details={"processed": count, "skipped": skipped, "filename": file.filename},
+            request=request,
+        )
         db.commit()
         message = f"Procesados+{count}+registros"
         if skipped:
             message += f"+({skipped}+omitidos)"
         return RedirectResponse(url=f"/students?msg={message}", status_code=303)
-    except Exception as e:
-        print(e)
+    except Exception:
         return RedirectResponse(url="/students?error=Error+al+procesar+archivo", status_code=303)
 
 
@@ -292,7 +316,7 @@ def import_photos_zip(file: UploadFile = File(...), db: Session = Depends(databa
 
 @router.post("/update-lunch-groups")
 def update_lunch_groups_students(
-    file: UploadFile = File(...), db: Session = Depends(database.get_db)
+    request: Request, file: UploadFile = File(...), db: Session = Depends(database.get_db)
 ):
     """
     Excel: Col 0 -> Student ID, Col 1 -> Grupos (Texto)
@@ -328,10 +352,17 @@ def update_lunch_groups_students(
                     student.lunch_type = models.LunchType.NONE.value
                 updated += 1
 
+        add_audit(
+            db,
+            action="students.lunch_groups_imported",
+            actor_id=request.state.user.id,
+            entity_type="student",
+            details={"updated": updated, "skipped": skipped, "filename": file.filename},
+            request=request,
+        )
         db.commit()
         return RedirectResponse(f"/students?msg=Almuerzos+actualizados:+{updated}", 303)
-    except Exception as e:
-        print(e)
+    except Exception:
         return RedirectResponse("/students?error=Error+procesando+archivo", 303)
 
 

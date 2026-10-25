@@ -6,10 +6,10 @@
         <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
         <div class="flex items-center mt-1">
             <span class="text-gray-500 mr-2">Actividad del día:</span>
-            <!-- INPUT DE FECHA -->
-            <input type="date" id="datePicker" value="{{ today_date }}" 
+            <input type="date" id="datePicker" value="{{ today_date }}"
                    class="border rounded p-1 text-gray-700 font-bold bg-white shadow-sm focus:ring focus:ring-blue-200">
         </div>
+        <p id="dashboard-error" class="hidden mt-2 text-sm text-red-600"></p>
     </div>
     <button onclick="updateDashboard()" class="text-blue-600 hover:text-blue-800 text-sm font-semibold">
         <i class="fas fa-sync-alt mr-1"></i> Refrescar Datos
@@ -18,8 +18,6 @@
 
 <!-- KPIs / Tarjetas -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    
-    <!-- Card 1: Salidas (Clickable) -->
     <div onclick="openDetailsModal('all')" class="bg-white rounded-lg shadow p-5 border-l-4 border-blue-500 cursor-pointer hover:bg-blue-50 transition transform hover:scale-105">
         <div class="flex items-center justify-between">
             <div class="flex items-center">
@@ -28,7 +26,6 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-gray-500 text-sm font-medium uppercase">Total Salidas</p>
-                    <!-- ID para actualizar -->
                     <p id="kpi-exits" class="text-3xl font-bold text-gray-800">...</p>
                 </div>
             </div>
@@ -39,7 +36,6 @@
         <p class="text-xs text-blue-500 mt-2 text-center font-semibold">Ver detalles</p>
     </div>
 
-    <!-- Card 2: Puertas (Lista Clickable) -->
     <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500 md:col-span-1">
         <div class="flex items-center mb-3">
             <div class="flex-shrink-0 bg-green-100 rounded-full p-2 mr-3">
@@ -47,22 +43,18 @@
             </div>
             <p class="text-gray-500 text-sm font-medium uppercase">Salidas por Puerta</p>
         </div>
-        
-        <!-- Contenedor de lista dinámica -->
         <div id="doors-list-container" class="space-y-3 max-h-40 overflow-y-auto pr-1">
-            <!-- Se llena con JS -->
             <p class="text-gray-400 text-center py-4">Cargando...</p>
         </div>
     </div>
 
-    <!-- Card 3: Estudiantes -->
     <div class="bg-white rounded-lg shadow p-5 border-l-4 border-purple-500">
         <div class="flex items-center">
             <div class="flex-shrink-0 bg-purple-100 rounded-full p-3">
                 <i class="fas fa-users text-purple-600 text-xl"></i>
             </div>
             <div class="ml-4">
-                <p class="text-gray-500 text-sm font-medium uppercase">Total Estudiantes</p>
+                <p class="text-gray-500 text-sm font-medium uppercase">Estudiantes Activos</p>
                 <p id="kpi-students" class="text-3xl font-bold text-gray-800">...</p>
             </div>
         </div>
@@ -115,57 +107,99 @@
     </div>
 </div>
 
-<!-- Scripts -->
 <script src="/static/js/chart.min.js"></script>
 <script>
+    const AVATAR_PLACEHOLDER = '/static/assets/avatar.png';
     let chartTimelineInstance = null;
     let chartCoursesInstance = null;
 
-    // 1. Función Principal de Actualización
+    function showDashboardError(message) {
+        const box = document.getElementById('dashboard-error');
+        box.innerText = message;
+        box.classList.remove('hidden');
+    }
+
+    function buildDoorRow(door) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'cursor-pointer hover:bg-green-50 p-1 rounded group';
+        wrapper.addEventListener('click', () => openDetailsModal('door', door.id, door.name));
+
+        const header = document.createElement('div');
+        header.className = 'flex justify-between text-sm mb-1';
+
+        const name = document.createElement('span');
+        name.className = 'font-bold text-gray-700 group-hover:text-green-700';
+        name.innerText = door.name;
+
+        const count = document.createElement('span');
+        count.className = 'font-bold text-gray-800';
+        count.innerText = door.count + ' ';
+        const percent = document.createElement('span');
+        percent.className = 'text-xs text-gray-500 font-normal';
+        percent.innerText = `(${door.percent}%)`;
+        count.appendChild(percent);
+
+        header.appendChild(name);
+        header.appendChild(count);
+
+        const barBg = document.createElement('div');
+        barBg.className = 'w-full bg-gray-200 rounded-full h-2';
+        const bar = document.createElement('div');
+        bar.className = 'bg-green-500 h-2 rounded-full';
+        bar.style.width = `${door.percent}%`;
+        barBg.appendChild(bar);
+
+        wrapper.appendChild(header);
+        wrapper.appendChild(barBg);
+        return wrapper;
+    }
+
+    function renderDoors(doorsData) {
+        const container = document.getElementById('doors-list-container');
+        container.replaceChildren();
+
+        if (!doorsData.length) {
+            const empty = document.createElement('p');
+            empty.className = 'text-sm text-gray-400 text-center py-2';
+            empty.innerText = 'Sin actividad';
+            container.appendChild(empty);
+            return;
+        }
+
+        doorsData.forEach((door) => container.appendChild(buildDoorRow(door)));
+    }
+
     async function updateDashboard() {
         const selectedDate = document.getElementById('datePicker').value;
-        
-        // A. Actualizar KPIs y Lista Puertas
-        try {
-            const res = await fetch(`/api/dashboard/stats?date=${selectedDate}`);
-            const stats = await res.json();
-            
-            // Actualizar Números
-            document.getElementById('kpi-exits').innerText = stats.exits_count;
-            document.getElementById('kpi-students').innerText = stats.total_students;
-            
-            // Actualizar Lista Puertas (HTML dinámico)
-            const doorContainer = document.getElementById('doors-list-container');
-            doorContainer.innerHTML = '';
-            
-            if (stats.doors_data.length === 0) {
-                doorContainer.innerHTML = '<p class="text-sm text-gray-400 text-center py-2">Sin actividad</p>';
-            } else {
-                stats.doors_data.forEach(door => {
-                    const html = `
-                    <div onclick="openDetailsModal('door', ${door.id}, '${door.name}')" class="cursor-pointer hover:bg-green-50 p-1 rounded group">
-                        <div class="flex justify-between text-sm mb-1">
-                            <span class="font-bold text-gray-700 group-hover:text-green-700">${door.name}</span>
-                            <span class="font-bold text-gray-800">${door.count} <span class="text-xs text-gray-500 font-normal">(${door.percent}%)</span></span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-green-500 h-2 rounded-full" style="width: ${door.percent}%"></div>
-                        </div>
-                    </div>`;
-                    doorContainer.innerHTML += html;
-                });
-            }
-        } catch (e) { console.error("Error fetching stats", e); }
+        document.getElementById('dashboard-error').classList.add('hidden');
 
-        // B. Actualizar Gráficas
         try {
-            const res = await fetch(`/api/dashboard/chart-data?date=${selectedDate}`);
-            const data = await res.json();
-            
-            // Si ya existen, destruir para recrear (forma más limpia de actualizar)
+            const { response, data: stats } = await apiFetch(
+                `/api/dashboard/stats?date=${encodeURIComponent(selectedDate)}`
+            );
+            if (!response.ok) {
+                showDashboardError(apiErrorMessage(data, 'No fue posible cargar las estadísticas.'));
+            } else {
+                document.getElementById('kpi-exits').innerText = stats.exits_count;
+                document.getElementById('kpi-students').innerText = stats.total_students;
+                renderDoors(stats.doors_data);
+            }
+        } catch (error) {
+            showDashboardError('No fue posible cargar las estadísticas.');
+        }
+
+        try {
+            const { response, data } = await apiFetch(
+                `/api/dashboard/chart-data?date=${encodeURIComponent(selectedDate)}`
+            );
+            if (!response.ok) {
+                showDashboardError(apiErrorMessage(data, 'No fue posible cargar las gráficas.'));
+                return;
+            }
+
             if (chartTimelineInstance) chartTimelineInstance.destroy();
             if (chartCoursesInstance) chartCoursesInstance.destroy();
-            
+
             chartTimelineInstance = new Chart(document.getElementById('chartTimeline'), {
                 type: 'line',
                 data: {
@@ -193,17 +227,11 @@
                 },
                 options: { maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
             });
-
-        } catch (e) { console.error("Error fetching charts", e); }
+        } catch (error) {
+            showDashboardError('No fue posible cargar las gráficas.');
+        }
     }
 
-    // 2. Event Listener para el cambio de fecha
-    document.getElementById('datePicker').addEventListener('change', updateDashboard);
-
-    // 3. Cargar al inicio
-    document.addEventListener('DOMContentLoaded', updateDashboard);
-
-    // --- MODAL LOGIC ---
     const modal = document.getElementById('detailModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalContent = document.getElementById('modalContent');
@@ -211,60 +239,97 @@
     const modalLoader = document.getElementById('modalLoader');
     const modalEmpty = document.getElementById('modalEmpty');
 
-    function openDetailsModal(type, id=null, name='') {
-        const selectedDate = document.getElementById('datePicker').value;
-        
-        modal.classList.remove('hidden');
-        
-        if (type === 'all') {
-            modalTitle.innerText = `Todas las salidas (${selectedDate})`;
+    function buildDetailRow(item) {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-50 border-b';
+
+        const studentCell = document.createElement('td');
+        studentCell.className = 'px-4 py-3 flex items-center gap-3';
+
+        if (item.photo) {
+            const img = document.createElement('img');
+            img.src = item.photo;
+            img.alt = item.name;
+            img.className = 'w-8 h-8 rounded-full object-cover border bg-gray-100';
+            img.onerror = () => { img.onerror = null; img.src = AVATAR_PLACEHOLDER; };
+            studentCell.appendChild(img);
         } else {
-            modalTitle.innerText = `Salidas por ${name} (${selectedDate})`;
+            const initials = document.createElement('div');
+            initials.className = 'w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500';
+            initials.innerText = (item.name || '?').substring(0, 2);
+            studentCell.appendChild(initials);
         }
 
-        modalContent.innerHTML = '';
+        const name = document.createElement('span');
+        name.className = 'font-medium text-gray-800';
+        name.innerText = item.name;
+        studentCell.appendChild(name);
+
+        const courseCell = document.createElement('td');
+        courseCell.className = 'px-4 py-3 text-sm text-gray-600';
+        courseCell.innerText = item.course || '';
+
+        const timeCell = document.createElement('td');
+        timeCell.className = 'px-4 py-3 text-sm font-mono font-bold text-blue-600';
+        timeCell.innerText = item.time || '';
+
+        const doorCell = document.createElement('td');
+        doorCell.className = 'px-4 py-3 text-xs text-gray-500';
+        doorCell.innerText = item.door || '';
+
+        row.appendChild(studentCell);
+        row.appendChild(courseCell);
+        row.appendChild(timeCell);
+        row.appendChild(doorCell);
+        return row;
+    }
+
+    async function openDetailsModal(type, id = null, name = '') {
+        const selectedDate = document.getElementById('datePicker').value;
+
+        modal.classList.remove('hidden');
+        modalTitle.innerText = type === 'all'
+            ? `Todas las salidas (${selectedDate})`
+            : `Salidas por ${name} (${selectedDate})`;
+        modalContent.replaceChildren();
         modalTable.classList.add('hidden');
         modalEmpty.classList.add('hidden');
         modalLoader.classList.remove('hidden');
 
-        // Fetch con fecha seleccionada
-        let url = `/api/dashboard/details?type=${type}&date=${selectedDate}`;
-        if (id) url += `&id=${id}`;
+        let url = `/api/dashboard/details?type=${encodeURIComponent(type)}&date=${encodeURIComponent(selectedDate)}`;
+        if (id) url += `&id=${encodeURIComponent(id)}`;
 
-        fetch(url)
-            .then(res => res.json())
-            .then(data => {
-                modalLoader.classList.add('hidden');
-                if (data.length === 0) {
-                    modalEmpty.classList.remove('hidden');
-                    return;
-                }
-                modalTable.classList.remove('hidden');
-                data.forEach(item => {
-                    let avatar = item.photo 
-                        ? `<img src="${item.photo}" class="w-8 h-8 rounded-full object-cover border">` 
-                        : `<div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500">${item.name.substring(0,2)}</div>`;
+        try {
+            const { response, data } = await apiFetch(url);
+            modalLoader.classList.add('hidden');
+            if (!response.ok) {
+                modalEmpty.innerText = apiErrorMessage(data, 'No fue posible cargar el detalle.');
+                modalEmpty.classList.remove('hidden');
+                return;
+            }
+            if (data.length === 0) {
+                modalEmpty.innerText = 'No se encontraron registros en esta fecha.';
+                modalEmpty.classList.remove('hidden');
+                return;
+            }
 
-                    let row = `
-                        <tr class="hover:bg-gray-50 border-b">
-                            <td class="px-4 py-3 flex items-center gap-3">
-                                ${avatar}
-                                <span class="font-medium text-gray-800">${item.name}</span>
-                            </td>
-                            <td class="px-4 py-3 text-sm text-gray-600">${item.course}</td>
-                            <td class="px-4 py-3 text-sm font-mono font-bold text-blue-600">${item.time}</td>
-                            <td class="px-4 py-3 text-xs text-gray-500">${item.door}</td>
-                        </tr>`;
-                    modalContent.innerHTML += row;
-                });
-            })
-            .catch(err => console.error(err));
+            modalTable.classList.remove('hidden');
+            data.forEach((item) => modalContent.appendChild(buildDetailRow(item)));
+        } catch (error) {
+            modalLoader.classList.add('hidden');
+            modalEmpty.innerText = 'No fue posible cargar el detalle.';
+            modalEmpty.classList.remove('hidden');
+        }
     }
 
-    function closeModal() { modal.classList.add('hidden'); }
-    
-    modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
-    document.addEventListener('keydown', function(event) { if (event.key === "Escape") closeModal(); });
+    function closeModal() {
+        modal.classList.add('hidden');
+    }
 
+    modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModal(); });
+
+    document.getElementById('datePicker').addEventListener('change', updateDashboard);
+    document.addEventListener('DOMContentLoaded', updateDashboard);
 </script>
 {% endblock %}

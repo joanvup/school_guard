@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -9,6 +7,18 @@ from jose import jwt
 from passlib.context import CryptContext
 
 from .config import settings
+from .services.qr import sign_qr_content, sign_qr_v1_with_key, verify_qr_content
+
+__all__ = [
+    "DUMMY_HASH",
+    "LoginRateLimiter",
+    "create_access_token",
+    "get_password_hash",
+    "login_limiter",
+    "sign_qr_content",
+    "verify_password",
+    "verify_qr_content",
+]
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 DUMMY_HASH = pwd_context.hash("dummy-password-for-timing")
@@ -35,35 +45,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 def _sign_qr(student_id: str, key: str) -> str:
-    signature = hmac.new(
-        key.encode("utf-8"), student_id.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
-    return signature[:16]
-
-
-def sign_qr_content(student_id: str) -> str:
-    """Genera un string firmado: ID.FIRMA (primeros 16 hex del HMAC)."""
-    return f"{student_id}.{_sign_qr(student_id, settings.qr_secret_key_current)}"
-
-
-def verify_qr_content(qr_content: str) -> str | None:
-    """Verifica la firma con la clave actual o la anterior y retorna el ID limpio."""
-    if not qr_content or "." not in qr_content:
-        return None
-
-    student_id, received_sig = qr_content.split(".", 1)
-    if not student_id or len(received_sig) != 16:
-        return None
-
-    keys = [settings.qr_secret_key_current]
-    if settings.qr_secret_key_previous:
-        keys.append(settings.qr_secret_key_previous)
-
-    for key in keys:
-        expected_sig = _sign_qr(student_id, key)
-        if hmac.compare_digest(expected_sig, received_sig):
-            return student_id
-    return None
+    """Firma v1 con una clave concreta; se usa en pruebas de rotación."""
+    return sign_qr_v1_with_key(student_id, key).rsplit(".", 1)[1]
 
 
 class LoginRateLimiter:

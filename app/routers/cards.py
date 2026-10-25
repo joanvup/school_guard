@@ -10,7 +10,8 @@ import io
 import os
 import zipfile
 import math
-from .. import database, models, deps, auth
+from .. import database, models, deps
+from ..services.qr import sign_qr_v2
 from ..utils.media import photo_file
 
 router = APIRouter(prefix="/cards", tags=["Cards & QR"], dependencies=[Depends(deps.require_admin)])
@@ -127,17 +128,16 @@ def draw_card(c: canvas.Canvas, person, is_employee=False):
         #    c.drawCentredString(CARD_WIDTH/2, info_y + 4*mm, person.position.upper())
         c.setFont("Helvetica", 9)
         c.drawCentredString(CARD_WIDTH / 2, info_y, f"C.C.: {person.doc_id}")
-        qr_data = person.doc_id
+        secure_qr = sign_qr_v2("employee", person.doc_id)
     else:
         # ESTUDIANTE
         # Curso omitido según diseño anterior, o se puede poner si se desea
         # c.drawCentredString(CARD_WIDTH/2, info_y + 4*mm, person.course)
         c.setFont("Helvetica", 9)
         c.drawCentredString(CARD_WIDTH / 2, info_y, f"ID: {person.student_id}")
-        qr_data = person.student_id
+        secure_qr = sign_qr_v2("student", person.student_id)
 
     # 5. QR Firmado
-    secure_qr = auth.sign_qr_content(qr_data)
     qr_img = generate_qr_image(secure_qr)
 
     qr_size = 26 * mm
@@ -215,7 +215,7 @@ def download_all_qrs_zip(db: Session = Depends(database.get_db)):
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zf:
         for s in students:
-            qr = generate_qr_image(auth.sign_qr_content(s.student_id))
+            qr = generate_qr_image(sign_qr_v2("student", s.student_id))
             ib = io.BytesIO()
             qr.save(ib, format="PNG")
             ib.seek(0)
@@ -251,7 +251,7 @@ def download_all_employee_qrs_zip(db: Session = Depends(database.get_db)):
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zf:
         for e in employees:
-            qr = generate_qr_image(auth.sign_qr_content(e.doc_id))
+            qr = generate_qr_image(sign_qr_v2("employee", e.doc_id))
             ib = io.BytesIO()
             qr.save(ib, format="PNG")
             ib.seek(0)

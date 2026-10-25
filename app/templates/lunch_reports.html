@@ -59,86 +59,147 @@
 
 <!-- Tabla -->
 <div class="bg-white shadow-md rounded-lg overflow-hidden">
-    <table class="min-w-full leading-normal" id="lunchTable">
-        <thead>
-            <tr>
-                <th onclick="sortTable(0)"
-                    class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
-                    Fecha/Hora <i class="fas fa-sort ml-1 text-gray-400"></i>
-                </th>
-                <th onclick="sortTable(1)"
-                    class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
-                    Persona <i class="fas fa-sort ml-1 text-gray-400"></i>
-                </th>
-                <th onclick="sortTable(2)"
-                    class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
-                    Tipo <i class="fas fa-sort ml-1 text-gray-400"></i>
-                </th>
-                <th onclick="sortTable(3)"
-                    class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
-                    Curso/Cargo <i class="fas fa-sort ml-1 text-gray-400"></i>
-                </th>
-                <th onclick="sortTable(4)"
-                    class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase select-none">
-                    Menú <i class="fas fa-sort ml-1 text-gray-400"></i>
-                </th>
-                <th onclick="sortTable(5)"
-                    class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase select-none">
-                    Operador <i class="fas fa-sort ml-1 text-gray-400"></i>
-                </th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for log in logs %}
-            <tr class="hover:bg-gray-50">
-                <!-- Usamos data-value con ISO format para ordenar correctamente por fecha completa -->
-                <td data-value="{{ log.timestamp.isoformat() }}"
-                    class="px-5 py-2 border-b border-gray-200 text-sm font-mono text-gray-600">
-                    {{ log.timestamp.strftime('%Y-%m-%d %I:%M %p') }}
-                </td>
-                <td class="px-5 py-2 border-b border-gray-200 text-sm font-bold text-gray-800">
-                    {% if log.student %} {{ log.student.full_name }}
-                    {% elif log.employee %} {{ log.employee.full_name }}
-                    {% else %} ? {% endif %}
-                </td>
-                <td class="px-5 py-2 border-b border-gray-200 text-xs text-gray-500 uppercase">
-                    {% if log.student %} Estudiante {% else %} Empleado {% endif %}
-                </td>
-                <td class="px-5 py-2 border-b border-gray-200 text-sm text-gray-600">
-                    {% if log.student %} {{ log.student.course }}
-                    {% elif log.employee %} {{ log.employee.position }} {% endif %}
-                </td>
-                <td class="px-5 py-2 border-b border-gray-200 text-center">
-                    <span
-                        class="px-2 py-1 rounded text-xs font-bold text-white {{ 'bg-green-500' if log.delivered_type == 'Normal' else 'bg-purple-500' }}">
-                        {{ log.delivered_type }}
-                    </span>
-                </td>
-                <td class="px-5 py-2 border-b border-gray-200 text-center text-xs text-gray-400">
-                    {{ log.operator.username }}
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="6" class="p-4 text-center text-gray-500">Sin registros</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="overflow-x-auto">
+        <table class="min-w-full leading-normal" id="lunchTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)"
+                        class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                        Fecha/Hora <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                    <th onclick="sortTable(1)"
+                        class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                        Persona <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                    <th onclick="sortTable(2)"
+                        class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                        Tipo <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                    <th onclick="sortTable(3)"
+                        class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase select-none">
+                        Curso/Cargo <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                    <th onclick="sortTable(4)"
+                        class="cursor-pointer hover:bg-gray-200 px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase select-none">
+                        Menú <i class="fas fa-sort ml-1 text-gray-400"></i>
+                    </th>
+                    <th class="px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase">
+                        Operador
+                    </th>
+                    <th class="px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase">
+                        Ticket
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr class="hover:bg-gray-50">
+                    <td data-value="{{ log.timestamp.isoformat() }}"
+                        class="px-5 py-2 border-b border-gray-200 text-sm font-mono text-gray-600">
+                        {{ log.service_date.isoformat() }} {{ log.timestamp.strftime('%I:%M %p') }}
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-sm font-bold text-gray-800">
+                        {% if log.person_name %}{{ log.person_name }}
+                        {% elif log.student %}{{ log.student.full_name }}
+                        {% elif log.employee %}{{ log.employee.full_name }}
+                        {% else %}?{% endif %}
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-xs text-gray-500 uppercase">
+                        {% if log.student_id %}Estudiante{% elif log.employee_id %}Empleado{% else %}?{% endif %}
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-sm text-gray-600">
+                        {% if log.person_extra %}{{ log.person_extra }}
+                        {% elif log.student %}{{ log.student.course }}
+                        {% elif log.employee %}{{ log.employee.position or '' }}
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-center">
+                        <span
+                            class="px-2 py-1 rounded text-xs font-bold text-white {{ 'bg-green-500' if log.delivered_type == 'Normal' else 'bg-purple-500' }}">
+                            {{ log.delivered_type }}
+                        </span>
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-center text-xs text-gray-400">
+                        {% if log.operator %}{{ log.operator.username }}{% else %}—{% endif %}
+                    </td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-center">
+                        {% if log.public_id %}
+                        <button type="button" data-public-id="{{ log.public_id }}" onclick="reprintTicket(this.dataset.publicId)"
+                            class="text-blue-600 hover:text-blue-800 text-xs font-bold">
+                            <i class="fas fa-print mr-1"></i> Reimprimir
+                        </button>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="p-4 text-center text-gray-500">Sin registros</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Paginación -->
+    <div class="bg-gray-50 px-5 py-3 border-t flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs text-gray-500">
+            {{ pagination.total_records }} registros · Página {{ pagination.page }} de {{ pagination.total_pages }}
+        </p>
+        <div class="flex gap-2">
+            <a href="/lunch/reports?date_start={{ filters.date_start }}&date_end={{ filters.date_end }}&lunch_type={{ filters.lunch_type or '' }}&person_type={{ filters.person_type or '' }}&page={{ pagination.page - 1 }}"
+                class="px-3 py-1 rounded text-sm border {{ 'bg-white text-blue-600 hover:bg-blue-50' if pagination.has_prev else 'bg-gray-100 text-gray-400 pointer-events-none' }}">
+                Anterior
+            </a>
+            <a href="/lunch/reports?date_start={{ filters.date_start }}&date_end={{ filters.date_end }}&lunch_type={{ filters.lunch_type or '' }}&person_type={{ filters.person_type or '' }}&page={{ pagination.page + 1 }}"
+                class="px-3 py-1 rounded text-sm border {{ 'bg-white text-blue-600 hover:bg-blue-50' if pagination.has_next else 'bg-gray-100 text-gray-400 pointer-events-none' }}">
+                Siguiente
+            </a>
+        </div>
+    </div>
 </div>
 
 <script>
+    async function reprintTicket(publicId) {
+        const printWindow = window.open('', '_blank');
+        try {
+            const { response, data } = await apiFetch(
+                `/lunch/tickets/${encodeURIComponent(publicId)}/reprint`,
+                { method: 'POST' }
+            );
+            if (response.status === 401) {
+                if (printWindow) printWindow.close();
+                window.location.href = '/login';
+                return;
+            }
+            if (!response.ok) {
+                if (printWindow) printWindow.close();
+                alert(apiErrorMessage(data, 'No fue posible reimprimir el ticket.'));
+                return;
+            }
+            if (data.over_limit) {
+                alert('Advertencia: este ticket supera las 3 reimpresiones registradas.');
+            }
+            if (printWindow) {
+                printWindow.location = data.print_url;
+            } else {
+                window.location.href = data.print_url;
+            }
+        } catch (error) {
+            if (printWindow) printWindow.close();
+            alert('Error de conexión al reimprimir el ticket.');
+        }
+    }
+
     function sortTable(n) {
         var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-        table = document.getElementById("lunchTable");
+        table = document.getElementById('lunchTable');
         switching = true;
-        dir = "asc";
+        dir = 'asc';
 
-        // Reset iconos
-        const headers = table.getElementsByTagName("th");
+        const headers = table.getElementsByTagName('th');
         for (let h of headers) {
             let icon = h.querySelector('i');
-            if (icon) icon.className = "fas fa-sort ml-1 text-gray-400";
+            if (icon) icon.className = 'fas fa-sort ml-1 text-gray-400';
         }
 
         while (switching) {
@@ -146,15 +207,15 @@
             rows = table.rows;
             for (i = 1; i < (rows.length - 1); i++) {
                 shouldSwitch = false;
-                x = rows[i].getElementsByTagName("TD")[n];
-                y = rows[i + 1].getElementsByTagName("TD")[n];
+                x = rows[i].getElementsByTagName('TD')[n];
+                y = rows[i + 1].getElementsByTagName('TD')[n];
 
-                let xVal = x.getAttribute("data-value") || x.innerText.toLowerCase();
-                let yVal = y.getAttribute("data-value") || y.innerText.toLowerCase();
+                let xVal = x.getAttribute('data-value') || x.innerText.toLowerCase();
+                let yVal = y.getAttribute('data-value') || y.innerText.toLowerCase();
 
-                if (dir == "asc") {
+                if (dir === 'asc') {
                     if (xVal > yVal) { shouldSwitch = true; break; }
-                } else if (dir == "desc") {
+                } else if (dir === 'desc') {
                     if (xVal < yVal) { shouldSwitch = true; break; }
                 }
             }
@@ -163,14 +224,14 @@
                 switching = true;
                 switchcount++;
             } else {
-                if (switchcount == 0 && dir == "asc") {
-                    dir = "desc";
+                if (switchcount === 0 && dir === 'asc') {
+                    dir = 'desc';
                     switching = true;
                 }
             }
         }
         let activeIcon = headers[n].querySelector('i');
-        if (activeIcon) activeIcon.className = dir === 'asc' ? "fas fa-sort-up ml-1 text-gray-800" : "fas fa-sort-down ml-1 text-gray-800";
+        if (activeIcon) activeIcon.className = dir === 'asc' ? 'fas fa-sort-up ml-1 text-gray-800' : 'fas fa-sort-down ml-1 text-gray-800';
     }
 </script>
 {% endblock %}

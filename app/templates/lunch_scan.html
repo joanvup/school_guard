@@ -1,15 +1,11 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- ESTILOS DE IMPRESIÓN Y UI -->
 <style>
-    /* Estilos normales de pantalla */
     .input-hidden-focus {
         caret-color: transparent;
-        /* Ocultar cursor parpadeante si molesta */
     }
 
-    /* Toggle switch */
     .toggle-checkbox:checked {
         right: 0;
         border-color: #68d391;
@@ -18,31 +14,26 @@
         background-color: #68d391;
     }
 
-    /* ESTILOS EXCLUSIVOS DE IMPRESIÓN */
-    #printable-ticket {
+    #print-area {
         display: none;
     }
 
     @media print {
-
-        /* Ocultar TODO excepto el ticket */
         body * {
             visibility: hidden;
         }
 
-        #printable-ticket,
-        #printable-ticket * {
+        #print-area,
+        #print-area * {
             visibility: visible;
         }
 
-        /* Posicionar ticket al inicio de la página */
-        #printable-ticket {
+        #print-area {
             position: absolute;
             left: 0;
             top: 0;
             display: block !important;
             width: 72mm;
-            /* No forzamos height fija para permitir contenido variable */
             padding: 2mm;
             text-align: center;
             font-family: 'Courier New', Courier, monospace;
@@ -50,44 +41,35 @@
             background: white;
         }
 
-        /* Forzar saltos de página y márgenes cero */
         @page {
             size: 75mm auto;
-            /* Ancho fijo, largo automático */
             margin: 0mm;
         }
     }
 </style>
 
 <div class="max-w-2xl mx-auto no-print">
-
-    <!-- Header -->
     <div class="bg-green-600 text-white p-4 rounded-t-lg shadow-lg flex justify-between items-center">
         <div>
             <h2 class="text-2xl font-bold"><i class="fas fa-utensils mr-2"></i> Control de Almuerzos</h2>
-            <p class="text-green-100 text-sm">Escanee QR, Tarjeta o Digite ID</p>
+            <p class="text-green-100 text-sm">Escanee QR/RFID o busque por nombre</p>
         </div>
         <div id="inputStatus" class="bg-green-700 px-3 py-1 rounded text-xs font-mono transition-colors">
             <i class="fas fa-keyboard"></i> Listo
         </div>
     </div>
 
-    <!-- Body -->
     <div class="bg-white p-6 rounded-b-lg shadow-lg border-x border-b">
-
-        <!-- INPUT: Numérico para móviles -->
         <div class="mb-4 relative">
             <input type="text" id="rfidInput"
                 class="w-full border-2 border-gray-300 rounded p-3 text-lg focus:border-green-500 focus:ring-green-200 focus:outline-none font-mono tracking-widest input-hidden-focus"
-                placeholder="Clic aquí para escanear..." autocomplete="off" inputmode="numeric" pattern="[0-9]*">
-            <!-- Permitimos letras por si el RFID es Hexadecimal, si es solo numeros usa: /[^0-9]/g -->
+                placeholder="Clic aquí para escanear QR o RFID..." autocomplete="off" inputmode="text">
 
             <div class="absolute right-3 top-4 text-gray-400">
                 <i class="fas fa-wifi"></i>
             </div>
         </div>
 
-        <!-- BOTONES ACCIÓN -->
         <div class="flex flex-wrap gap-4 mb-4 items-center">
             <button onclick="toggleCamera()"
                 class="text-green-600 text-sm font-bold underline hover:text-green-800 transition">
@@ -98,7 +80,6 @@
                 <i class="fas fa-search"></i> Buscar por Nombre
             </button>
 
-            <!-- Toggle Impresión -->
             <div class="flex items-center ml-auto">
                 <label class="relative inline-flex items-center cursor-pointer" title="Imprimir ticket automáticamente">
                     <input type="checkbox" id="autoPrintToggle" class="sr-only peer" checked>
@@ -108,19 +89,19 @@
             </div>
         </div>
 
-        <!-- CONTENEDOR CÁMARA -->
+        <p id="connection-error" class="hidden mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2"></p>
+
         <div id="cameraContainer"
             class="hidden bg-black rounded-lg overflow-hidden shadow-xl relative mb-4 transition-all"
             style="min-height: 300px;">
             <div id="reader" class="w-full h-full"></div>
         </div>
+        <p id="camera-error" class="hidden mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2"></p>
 
-        <!-- RESULTADO -->
         <div id="resultCard" class="hidden animate-fade-in-up">
             <div id="resultBg" class="border-4 rounded-lg p-6 text-center transition-colors duration-300">
-
                 <div class="flex flex-col items-center">
-                    <img id="resPhoto" src=""
+                    <img id="resPhoto" src="/static/assets/avatar.png" alt="Foto de la persona"
                         class="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg mb-4 bg-gray-100">
                     <h2 id="resName" class="text-2xl font-bold text-gray-800 leading-tight">---</h2>
                     <p id="resExtra" class="text-gray-500 font-bold text-lg mb-1"></p>
@@ -135,8 +116,7 @@
 
                 <div id="resMsg" class="mt-4 font-bold text-lg text-gray-700"></div>
 
-                <!-- Botón manual por si falla la impresión automática -->
-                <button id="btnPrint" onclick="window.print()"
+                <button id="btnPrint" onclick="reprintCurrentTicket()"
                     class="mt-6 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-bold hidden">
                     <i class="fas fa-print mr-2"></i> Reimprimir Ticket
                 </button>
@@ -145,14 +125,14 @@
     </div>
 </div>
 
-<!-- TICKET OCULTO (Solo visible al imprimir) -->
-<div id="printable-ticket">
+<!-- Plantilla de impresión: solo se llena al imprimir -->
+<div id="print-area">
     <div style="font-size: 12px; font-weight: bold; margin-bottom: 5px;">COLEGIO BILINGÜE</div>
     <div style="font-size: 9px; margin-bottom: 5px;">CONTROL DE ALIMENTACIÓN</div>
     <hr style="border-top: 1px dashed #000; margin: 5px 0;">
 
     <div id="ticket-type" style="font-size: 18px; font-weight: 900; margin: 8px 0;">NORMAL</div>
-
+    <div id="ticket-number" style="font-size: 9px; margin-bottom: 4px;"></div>
     <div id="ticket-name" style="font-size: 11px; font-weight: bold; line-height: 1.2;">NOMBRE</div>
     <div id="ticket-extra" style="font-size: 10px; margin-top: 2px;">CURSO</div>
 
@@ -160,7 +140,6 @@
         <span id="ticket-date">YYYY-MM-DD</span> - <span id="ticket-time">HH:MM</span>
     </div>
 
-    <!-- Contenedor QR del Ticket -->
     <div style="display: flex; justify-content: center; margin-top: 8px;">
         <div id="ticket-qr"></div>
     </div>
@@ -177,7 +156,7 @@
             <div class="flex gap-2 mb-4">
                 <input type="text" id="searchInput" placeholder="Escriba nombre (min 3 letras)..."
                     class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-300 outline-none"
-                    onkeydown="if(event.key === 'Enter') executeSearch()">
+                    onkeydown="if(event.key === 'Enter'){ event.preventDefault(); executeSearch(); }">
                 <button onclick="executeSearch()"
                     class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700">
                     <i class="fas fa-search"></i>
@@ -190,241 +169,359 @@
     </div>
 </div>
 
-<!-- AUDIOS -->
-<audio id="audio-success" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
-<audio id="audio-error" src="https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg"></audio>
-
-<!-- LIBRERÍAS -->
 <script src="/static/js/html5-qrcode.min.js"></script>
 <script src="/static/js/qrcode.min.js"></script>
 
 <script>
+    const PLACEHOLDER_PHOTO = '/static/assets/avatar.png';
     const rfidInput = document.getElementById('rfidInput');
     const inputStatus = document.getElementById('inputStatus');
-    let isProcessing = false;
-    let html5QrcodeScanner = null;
-
-    // --- INTERRUPTOR IMPRESIÓN ---
     const autoPrintToggle = document.getElementById('autoPrintToggle');
     const STORAGE_KEY = 'lunch_auto_print';
 
+    let isProcessing = false;
+    let pendingPayload = null;
+    let html5QrcodeScanner = null;
+    let currentTicket = null;
+    let printInProgress = false;
+    let queuedTicket = null;
+    let printFallbackTimer = null;
+
+    // --- IMPRESIÓN CON COLA ---
     function initPrintToggle() {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved !== null) {
-            autoPrintToggle.checked = saved === 'true';
+        if (saved !== null) autoPrintToggle.checked = saved === 'true';
+    }
+
+    autoPrintToggle.addEventListener('change', () => {
+        localStorage.setItem(STORAGE_KEY, autoPrintToggle.checked);
+    });
+
+    function prepareTicket(ticket) {
+        document.getElementById('ticket-name').innerText = ticket.name || '';
+        document.getElementById('ticket-type').innerText = (ticket.lunch_type || '').toUpperCase();
+        document.getElementById('ticket-extra').innerText = ticket.extra || '';
+        document.getElementById('ticket-date').innerText = ticket.date || '';
+        document.getElementById('ticket-time').innerText = ticket.time || '';
+        document.getElementById('ticket-number').innerText = ticket.number ? 'No. ' + ticket.number : '';
+
+        const qrContainer = document.getElementById('ticket-qr');
+        qrContainer.innerHTML = '';
+        try {
+            new QRCode(qrContainer, {
+                text: ticket.qr || ticket.public_id || '',
+                width: 128,
+                height: 128,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        } catch (error) {
+            qrContainer.innerText = 'QR no disponible';
         }
     }
 
-    function savePrintToggle() {
-        localStorage.setItem(STORAGE_KEY, autoPrintToggle.checked);
+    function enqueuePrint(ticket) {
+        if (!ticket) return;
+        if (printInProgress) {
+            queuedTicket = ticket;
+            return;
+        }
+
+        printInProgress = true;
+        prepareTicket(ticket);
+
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                try {
+                    window.print();
+                } catch (error) {
+                    releasePrint();
+                }
+            }, 50);
+        });
+
+        clearTimeout(printFallbackTimer);
+        printFallbackTimer = setTimeout(releasePrint, 30000);
     }
 
-    autoPrintToggle.addEventListener('change', savePrintToggle);
-    initPrintToggle();
+    function releasePrint() {
+        if (!printInProgress) return;
+        printInProgress = false;
+        clearTimeout(printFallbackTimer);
+        if (queuedTicket) {
+            const next = queuedTicket;
+            queuedTicket = null;
+            setTimeout(() => enqueuePrint(next), 250);
+        }
+    }
 
-    // --- 1. GESTIÓN DEL INPUT Y FOCO ---
+    window.addEventListener('afterprint', releasePrint);
+
+    function reprintCurrentTicket() {
+        if (!currentTicket) return;
+        reprintTicket(currentTicket.public_id);
+    }
+
+    async function reprintTicket(publicId) {
+        clearConnectionError();
+        try {
+            const { response, data } = await apiFetch(
+                `/lunch/tickets/${encodeURIComponent(publicId)}/reprint`,
+                { method: 'POST' }
+            );
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            if (!response.ok) {
+                showConnectionError(apiErrorMessage(data, 'No fue posible reimprimir el ticket.'));
+                return;
+            }
+            if (data.over_limit) {
+                showConnectionError('Advertencia: este ticket supera las 3 reimpresiones registradas.');
+            }
+            currentTicket = data.ticket;
+            enqueuePrint(data.ticket);
+        } catch (error) {
+            showConnectionError('No fue posible conectar con el servidor para reimprimir.');
+        }
+    }
+
+    // --- INPUT Y FOCO ---
     rfidInput.focus();
 
-    // Evitar perder el foco en desktop, pero permitirlo en móvil si se cierra teclado
-    document.addEventListener('click', (e) => {
-        // Solo re-enfocar si no se hizo clic en un botón o input
-        if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'A') {
+    document.addEventListener('click', (event) => {
+        const tag = event.target.tagName;
+        if (tag !== 'BUTTON' && tag !== 'INPUT' && tag !== 'A' && tag !== 'IMG') {
             rfidInput.focus();
         }
     });
 
     rfidInput.addEventListener('blur', () => {
-        inputStatus.className = "bg-yellow-500 px-3 py-1 rounded text-xs font-mono text-white";
-        inputStatus.innerHTML = "Lector en Pausa";
+        inputStatus.className = 'bg-yellow-500 px-3 py-1 rounded text-xs font-mono text-white';
+        inputStatus.innerHTML = 'Lector en Pausa';
     });
 
     rfidInput.addEventListener('focus', () => {
-        inputStatus.className = "bg-green-700 px-3 py-1 rounded text-xs font-mono text-white";
-        inputStatus.innerHTML = "Lector Listo";
+        inputStatus.className = 'bg-green-700 px-3 py-1 rounded text-xs font-mono text-white';
+        inputStatus.innerHTML = 'Lector Listo';
     });
 
-    rfidInput.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            setTimeout(() => {
-                const code = rfidInput.value.replace(/[^0-9a-zA-Z.]/g, '').trim();
-                rfidInput.value = '';
-                if (code.length > 0) sendCode(code);
-            }, 100);
-        }
+    rfidInput.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        const code = rfidInput.value.replace(/\s+/g, '').trim();
+        rfidInput.value = '';
+        if (code.length > 0) sendScannedCode(code);
     });
 
-    // --- 2. GESTIÓN DE CÁMARA (ROBUSTA) ---
+    function classifyScannedCode(code) {
+        if (code.startsWith('v2.')) return 'qr';
+        return /\.[0-9a-fA-F]{16}$/.test(code) ? 'qr' : 'rfid';
+    }
+
+    function sendScannedCode(code) {
+        sendPayload({ method: classifyScannedCode(code), code: code });
+    }
+
+    // --- CÁMARA ---
     async function toggleCamera() {
         const container = document.getElementById('cameraContainer');
+        clearCameraError();
 
         if (container.classList.contains('hidden')) {
-            // MOSTRAR
             container.classList.remove('hidden');
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showCameraError('Este navegador no permite usar la cámara. Use el lector o la búsqueda manual.');
+                return;
+            }
             if (!html5QrcodeScanner) {
                 html5QrcodeScanner = new Html5QrcodeScanner(
-                    "reader",
+                    'reader',
                     { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
                     false
                 );
-                html5QrcodeScanner.render(onScanSuccess, (err) => { });
+                html5QrcodeScanner.render(onScanSuccess, () => { });
             }
         } else {
-            // OCULTAR Y LIMPIAR MEMORIA
             container.classList.add('hidden');
             if (html5QrcodeScanner) {
                 try {
                     await html5QrcodeScanner.clear();
-                    html5QrcodeScanner = null;
                 } catch (error) {
-                    console.error("Error al limpiar cámara", error);
+                    console.error('Error al limpiar cámara', error);
                 }
+                html5QrcodeScanner = null;
             }
         }
     }
 
     function onScanSuccess(decodedText) {
-        if (isProcessing) return;
-        sendCode(decodedText);
-        // Pausa breve para UX
+        sendScannedCode(decodedText);
         if (html5QrcodeScanner) {
-            html5QrcodeScanner.pause();
-            setTimeout(() => html5QrcodeScanner.resume(), 2500);
+            try {
+                html5QrcodeScanner.pause();
+                setTimeout(() => {
+                    if (html5QrcodeScanner) html5QrcodeScanner.resume();
+                }, 2500);
+            } catch (error) {
+                // La cámara pudo haberse cerrado.
+            }
         }
     }
 
-    // --- 3. ENVÍO DE DATOS ---
-    async function sendCode(code) {
-        if (isProcessing) return;
-        isProcessing = true;
+    // --- ENVÍO AL SERVIDOR ---
+    async function sendPayload(payload) {
+        if (isProcessing) {
+            pendingPayload = payload;
+            return;
+        }
 
-        // Feedback visual de carga (opcional)
-        // document.getElementById('inputStatus').innerText = "Procesando...";
+        isProcessing = true;
+        clearConnectionError();
+        clearResult();
+        inputStatus.className = 'bg-blue-600 px-3 py-1 rounded text-xs font-mono text-white';
+        inputStatus.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Procesando';
 
         try {
-            const response = await fetch('/lunch/process', {
+            const { response, data } = await apiFetch('/lunch/process', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: code })
+                body: JSON.stringify(payload)
             });
-            const data = await response.json();
-            showResult(data);
-        } catch (e) {
-            console.error(e);
-            alert("Error de conexión con el servidor. " + e);
-        }
 
-        isProcessing = false;
-        rfidInput.focus(); // Devolver foco siempre
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            if (!response.ok && !data) {
+                showConnectionError(apiErrorMessage(data, `Error del servidor (${response.status})`));
+                return;
+            }
+            showResult(data);
+        } catch (error) {
+            const message = error.name === 'AbortError'
+                ? 'El servidor tardó demasiado en responder.'
+                : 'No fue posible conectar con el servidor.';
+            showConnectionError(message);
+        } finally {
+            isProcessing = false;
+            inputStatus.className = 'bg-green-700 px-3 py-1 rounded text-xs font-mono text-white';
+            inputStatus.innerHTML = '<i class="fas fa-keyboard"></i> Listo';
+            rfidInput.focus();
+            if (pendingPayload) {
+                const next = pendingPayload;
+                pendingPayload = null;
+                setTimeout(() => sendPayload(next), 150);
+            }
+        }
     }
 
-    // --- 4. MOSTRAR RESULTADO ---
-    function showResult(data) {
-        document.getElementById('resultCard').classList.remove('hidden');
+    // --- RESULTADO ---
+    function clearResult() {
+        document.getElementById('resultCard').classList.add('hidden');
         document.getElementById('btnPrint').classList.add('hidden');
+        currentTicket = null;
+    }
 
-        // Limpieza explícita
-        document.getElementById('resName').innerText = "---";
-        document.getElementById('resExtra').innerText = "";
-        document.getElementById('resPersonType').innerText = "";
-        document.getElementById('resLunchType').innerText = "--";
-        document.getElementById('resPhoto').src = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+    function clearConnectionError() {
+        document.getElementById('connection-error').classList.add('hidden');
+    }
 
-        // Llenar Datos
+    function showConnectionError(message) {
+        const box = document.getElementById('connection-error');
+        box.innerText = message;
+        box.classList.remove('hidden');
+    }
+
+    function clearCameraError() {
+        document.getElementById('camera-error').classList.add('hidden');
+    }
+
+    function showCameraError(message) {
+        const box = document.getElementById('camera-error');
+        box.innerText = message;
+        box.classList.remove('hidden');
+    }
+
+    function setPhoto(photoUrl) {
+        const img = document.getElementById('resPhoto');
+        img.src = photoUrl || PLACEHOLDER_PHOTO;
+        img.onerror = () => { img.onerror = null; img.src = PLACEHOLDER_PHOTO; };
+    }
+
+    function showResult(data) {
+        if (!data || typeof data !== 'object') {
+            showConnectionError('Respuesta inválida del servidor.');
+            return;
+        }
+
+        document.getElementById('resultCard').classList.remove('hidden');
+        document.getElementById('resName').innerText = '---';
+        document.getElementById('resExtra').innerText = '';
+        document.getElementById('resPersonType').innerText = '';
+        document.getElementById('resLunchType').innerText = '--';
+        setPhoto(null);
+
         if (data.person) {
             document.getElementById('resName').innerText = data.person.name;
             document.getElementById('resExtra').innerText = data.person.extra;
             document.getElementById('resPersonType').innerText = data.person.type;
-            let photo = data.person.photo ? data.person.photo : `https://ui-avatars.com/api/?name=${data.person.name}`;
-            document.getElementById('resPhoto').src = photo;
+            setPhoto(data.person.photo);
         } else {
-            document.getElementById('resName').innerText = "NO ENCONTRADO";
-            document.getElementById('resPhoto').src = "https://ui-avatars.com/api/?name=X&background=fee2e2&color=ef4444";
+            document.getElementById('resName').innerText = 'NO ENCONTRADO';
         }
 
         const bg = document.getElementById('resultBg');
         const box = document.getElementById('resLunchBox');
         const lunchTitle = document.getElementById('resLunchType');
-        document.getElementById('resMsg').innerText = data.message;
+        document.getElementById('resMsg').innerText = data.message || '';
+        document.getElementById('btnPrint').classList.add('hidden');
+        currentTicket = null;
 
-        // Lógica de Colores y Ticket
         if (data.status === 'success') {
-            lunchTitle.innerText = data.lunch_type;
-            const color = (data.lunch_type === 'Especial') ? 'purple' : 'green';
-            bg.className = `border-4 border-${color}-500 bg-${color}-50 rounded-lg p-6 text-center`;
-            box.className = `mt-6 p-4 rounded-lg text-white bg-${color}-600 shadow-lg`;
-            try { document.getElementById('audio-success').play(); } catch (e) { }
-
-            // IMPRESIÓN ROBUSTA
-            if (data.ticket_data) {
-                prepareTicket(data.ticket_data);
-                document.getElementById('btnPrint').classList.remove('hidden');
-
-                if (autoPrintToggle.checked) {
-                    setTimeout(() => {
-                        window.print();
-                    }, 1000);
-                }
+            lunchTitle.innerText = data.lunch_type || 'NORMAL';
+            if (data.lunch_type === 'Especial') {
+                bg.className = 'border-4 border-purple-500 bg-purple-50 rounded-lg p-6 text-center';
+                box.className = 'mt-6 p-4 rounded-lg text-white bg-purple-600 shadow-lg';
+            } else {
+                bg.className = 'border-4 border-green-500 bg-green-50 rounded-lg p-6 text-center';
+                box.className = 'mt-6 p-4 rounded-lg text-white bg-green-600 shadow-lg';
             }
+            playFeedbackSound(true);
 
+            if (data.ticket) {
+                currentTicket = data.ticket;
+                document.getElementById('btnPrint').classList.remove('hidden');
+                if (autoPrintToggle.checked) enqueuePrint(data.ticket);
+            }
         } else if (data.status === 'warning') {
-            lunchTitle.innerText = data.lunch_type || "NORMAL";
-            bg.className = "border-4 border-orange-500 bg-orange-50 rounded-lg p-6 text-center";
-            box.className = "mt-6 p-4 rounded-lg text-white bg-orange-500 shadow-lg";
-            try { document.getElementById('audio-error').play(); } catch (e) { }
+            lunchTitle.innerText = data.lunch_type || 'NORMAL';
+            bg.className = 'border-4 border-orange-500 bg-orange-50 rounded-lg p-6 text-center';
+            box.className = 'mt-6 p-4 rounded-lg text-white bg-orange-500 shadow-lg';
+            playFeedbackSound(false);
 
+            if (data.ticket) {
+                currentTicket = data.ticket;
+                document.getElementById('btnPrint').classList.remove('hidden');
+            }
         } else {
-            lunchTitle.innerText = data.status === 'denied' ? "NO AUTORIZADO" : "ERROR";
-            bg.className = "border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center";
-            box.className = "mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg";
-            try { document.getElementById('audio-error').play(); } catch (e) { }
+            lunchTitle.innerText = data.status === 'denied' ? 'NO AUTORIZADO' : 'ERROR';
+            bg.className = 'border-4 border-red-600 bg-red-50 rounded-lg p-6 text-center';
+            box.className = 'mt-6 p-4 rounded-lg text-white bg-red-600 shadow-lg';
+            playFeedbackSound(false);
         }
     }
 
-    // --- 5. PREPARAR TICKET ---
-    function prepareTicket(data) {
-        // Texto visible (sin cambios)
-        document.getElementById('ticket-name').innerText = data.name;
-        document.getElementById('ticket-type').innerText = data.type;
-        document.getElementById('ticket-extra').innerText = data.extra;
-        document.getElementById('ticket-date').innerText = data.date;
-        document.getElementById('ticket-time').innerText = data.time;
-
-        const qrContainer = document.getElementById('ticket-qr');
-        qrContainer.innerHTML = ""; // Limpiar cualquier QR previo
-
-        // PREPARAR DATOS PARA EL QR
-        // Si el nombre es muy largo (>20 caracteres), lo cortamos para que quepa en el QR
-        let safeName = data.name.length > 20 ? data.name.substring(0, 20) : data.name;
-
-        // Eliminamos tildes o caracteres raros que ocupan más bits
-        safeName = safeName.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-        // Generar nuevo QR con manejo de errores
-        try {
-            new QRCode(qrContainer, {
-                text: `${safeName}|${data.type}|${data.time}`,
-                width: 128,
-                height: 128,
-                colorDark: "#000000",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.L // Nivel L permite más datos pero es menos robusto a daños
-            });
-        } catch (qrError) {
-            console.error("Error generando QR:", qrError);
-            qrContainer.innerHTML = "<span style='font-size:10px'>Error QR</span>";
-            // No lanzamos el error hacia arriba para evitar el alert de 'Error de Servidor'
-        }
-    }
-
-    // --- 6. BÚSQUEDA MANUAL ---
+    // --- BÚSQUEDA MANUAL ---
     const modalSearch = document.getElementById('modalSearch');
     const searchInput = document.getElementById('searchInput');
     const searchResults = document.getElementById('searchResults');
 
     function openSearchModal() {
         modalSearch.classList.remove('hidden');
-        searchInput.value = "";
+        searchInput.value = '';
         searchResults.innerHTML = '<p class="text-gray-400 text-center text-sm mt-2">Digite nombre...</p>';
         setTimeout(() => searchInput.focus(), 100);
     }
@@ -436,36 +533,77 @@
 
     async function executeSearch() {
         const q = searchInput.value.trim();
-        if (q.length < 3) return;
+        if (q.length < 3) {
+            searchResults.innerHTML = '<p class="text-gray-500 text-center text-sm">Escriba al menos 3 letras.</p>';
+            return;
+        }
+
         searchResults.innerHTML = '<div class="text-center py-2"><i class="fas fa-circle-notch fa-spin text-blue-500"></i></div>';
 
         try {
-            const res = await fetch(`/lunch/search_person?q=${encodeURIComponent(q)}`);
-            const data = await res.json();
-            if (data.length === 0) {
-                searchResults.innerHTML = '<p class="text-gray-500 text-center text-sm">Sin resultados.</p>';
+            const { response, data } = await apiFetch(`/lunch/search_person?q=${encodeURIComponent(q)}`);
+            if (!response.ok) {
+                searchResults.innerHTML = '';
+                const message = document.createElement('p');
+                message.className = 'text-red-600 text-center text-sm';
+                message.innerText = apiErrorMessage(data, 'No fue posible realizar la búsqueda.');
+                searchResults.appendChild(message);
                 return;
             }
-            let html = '';
-            data.forEach(p => {
-                let photo = p.photo ? p.photo : `https://ui-avatars.com/api/?name=${p.name}`;
-                html += `
-                <div onclick="selectManual('${p.code}')" class="flex items-center p-2 border rounded hover:bg-blue-50 cursor-pointer transition">
-                    <img src="${photo}" class="w-10 h-10 rounded-full object-cover border mr-3">
-                    <div class="flex-1">
-                        <p class="text-sm font-bold text-gray-800">${p.name}</p>
-                        <p class="text-xs text-gray-500">${p.type} - ${p.extra}</p>
-                    </div>
-                    <i class="fas fa-chevron-right text-gray-400"></i>
-                </div>`;
+
+            searchResults.innerHTML = '';
+            if (!Array.isArray(data) || data.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'text-gray-500 text-center text-sm';
+                empty.innerText = 'Sin resultados.';
+                searchResults.appendChild(empty);
+                return;
+            }
+
+            data.forEach((person) => {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'w-full flex items-center p-2 border rounded hover:bg-blue-50 cursor-pointer transition text-left';
+                row.addEventListener('click', () => selectManual(person.person_type, person.person_id));
+
+                const img = document.createElement('img');
+                img.src = person.photo || PLACEHOLDER_PHOTO;
+                img.alt = person.name;
+                img.className = 'w-10 h-10 rounded-full object-cover border mr-3 bg-gray-100';
+                img.onerror = () => { img.onerror = null; img.src = PLACEHOLDER_PHOTO; };
+
+                const info = document.createElement('div');
+                info.className = 'flex-1';
+
+                const name = document.createElement('p');
+                name.className = 'text-sm font-bold text-gray-800';
+                name.innerText = person.name;
+
+                const detail = document.createElement('p');
+                detail.className = 'text-xs text-gray-500';
+                detail.innerText = `${person.type} - ${person.extra || ''}${person.has_lunch ? '' : ' (sin almuerzo)'}`;
+
+                info.appendChild(name);
+                info.appendChild(detail);
+
+                const icon = document.createElement('i');
+                icon.className = 'fas fa-chevron-right text-gray-400';
+
+                row.appendChild(img);
+                row.appendChild(info);
+                row.appendChild(icon);
+                searchResults.appendChild(row);
             });
-            searchResults.innerHTML = html;
-        } catch (e) { searchResults.innerHTML = 'Error'; }
+        } catch (error) {
+            searchResults.innerHTML = '<p class="text-red-600 text-center text-sm">Error de conexión.</p>';
+        }
     }
 
-    function selectManual(code) {
+    function selectManual(personType, personId) {
         closeSearchModal();
-        sendCode(code);
+        sendPayload({ method: 'manual', person_type: personType, person_id: personId });
     }
+
+    document.addEventListener('DOMContentLoaded', initPrintToggle);
 </script>
 {% endblock %}

@@ -1,17 +1,21 @@
-from fastapi import APIRouter, Depends, Request, Query
+from collections import defaultdict
+
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, Date
-from .. import database, models, deps
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
+
+from .. import database, deps, models
 from ..utils.media import photo_url
-from ..utils.time import parse_date, today_local
+from ..utils.time import day_range, parse_date, today_local
 
 router = APIRouter(dependencies=[Depends(deps.require_user)])
 templates = Jinja2Templates(directory="app/templates")
 
 
-def get_date_obj(date_str: str = None):
-    return parse_date(date_str)
+def _exit_range(target_date):
+    start_dt, end_dt = day_range(target_date)
+    return models.ExitLog.timestamp >= start_dt, models.ExitLog.timestamp <= end_dt
 
 
 # --- VISTA HTML PRINCIPAL (Routing por Rol) ---
@@ -20,17 +24,13 @@ def dashboard_view(request: Request, db: Session = Depends(database.get_db)):
     user = request.state.user
     today_str = today_local().isoformat()
 
-    # LOGICA DE REDIRECCIÓN POR ROL
     if user.role == models.UserRole.LUNCH_OP:
-        # El operador de almuerzo ve su propio dashboard
         return templates.TemplateResponse(
             "dashboard_lunch.html", {"request": request, "user": user, "today_date": today_str}
         )
-    else:
-        # Admin y Operador de Puerta ven el dashboard de Salidas
-        return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "user": user, "today_date": today_str}
-        )
+    return templates.TemplateResponse(
+        "dashboard.html", {"request": request, "user": user, "today_date": today_str}
+    )
 
 
 # ==========================================
@@ -43,34 +43,34 @@ def dashboard_view(request: Request, db: Session = Depends(database.get_db)):
     dependencies=[Depends(deps.require_exit_access)],
 )
 def get_exit_stats(date: str = Query(None), db: Session = Depends(database.get_db)):
-    target_date = get_date_obj(date)
+    target_date = parse_date(date)
+    start_filter, end_filter = _exit_range(target_date)
 
-    exits_count = (
-        db.query(models.ExitLog).filter(cast(models.ExitLog.timestamp, Date) == target_date).count()
-    )
-    total_students = db.query(models.Student).count()
+    exits_count = db.query(models.ExitLog).filter(start_filter, end_filter).count()
+    total_students = db.query(models.Student).filter(models.Student.is_active.is_(True)).count()
 
-    doors_aggs = (
-        db.query(models.Door, func.count(models.ExitLog.id))
-        .join(models.ExitLog, models.Door.id == models.ExitLog.door_id)
-        .filter(cast(models.ExitLog.timestamp, Date) == target_date)
-        .group_by(models.Door.id)
+    door_counts = (
+        db.query(models.Door.id, models.Door.name, func.count(models.ExitLog.id))
+        .outerjoin(
+            models.ExitLog,
+            (models.ExitLog.door_id == models.Door.id) & start_filter & end_filter,
+        )
+        .filter(models.Door.is_active.is_(True))
+        .group_by(models.Door.id, models.Door.name)
         .all()
     )
 
-    all_doors = db.query(models.Door).filter(models.Door.is_active.is_(True)).all()
     doors_stats = []
-    counts_map = {door.id: count for door, count in doors_aggs}
+    for door_id, door_name, count in door_counts:
+        percent = round((count / exits_count) * 100, 1) if exits_count else 0
+        doors_stats.append({"id": door_id, "name": door_name, "count": count, "percent": percent})
+    doors_stats.sort(key=lambda item: item["count"], reverse=True)
 
-    for door in all_doors:
-        count = counts_map.get(door.id, 0)
-        percent = 0
-        if exits_count > 0:
-            percent = round((count / exits_count) * 100, 1)
-        doors_stats.append({"id": door.id, "name": door.name, "count": count, "percent": percent})
-
-    doors_stats.sort(key=lambda x: x["count"], reverse=True)
-    return {"exits_count": exits_count, "total_students": total_students, "doors_data": doors_stats}
+    return {
+        "exits_count": exits_count,
+        "total_students": total_students,
+        "doors_data": doors_stats,
+    }
 
 
 @router.get(
@@ -78,35 +78,30 @@ def get_exit_stats(date: str = Query(None), db: Session = Depends(database.get_d
     dependencies=[Depends(deps.require_exit_access)],
 )
 def get_exit_charts(date: str = Query(None), db: Session = Depends(database.get_db)):
-    target_date = get_date_obj(date)
-    # Gráfica Cursos
+    target_date = parse_date(date)
+    start_filter, end_filter = _exit_range(target_date)
+
     courses_data = (
-        db.query(models.Student.course, func.count(models.ExitLog.id))
-        .join(models.ExitLog)
-        .filter(cast(models.ExitLog.timestamp, Date) == target_date)
-        .group_by(models.Student.course)
+        db.query(models.ExitLog.course, func.count(models.ExitLog.id))
+        .filter(start_filter, end_filter)
+        .group_by(models.ExitLog.course)
         .all()
     )
 
-    labels_c = [str(d[0]) for d in courses_data] if courses_data else ["Sin datos"]
-    values_c = [d[1] for d in courses_data] if courses_data else [0]
+    timeline = defaultdict(int)
+    timestamps = db.query(models.ExitLog.timestamp).filter(start_filter, end_filter).all()
+    for (timestamp,) in timestamps:
+        timeline[timestamp.hour] += 1
 
-    # Gráfica Tiempo
-    logs = (
-        db.query(models.ExitLog.timestamp)
-        .filter(cast(models.ExitLog.timestamp, Date) == target_date)
-        .all()
-    )
-    hours_map = {h: 0 for h in range(6, 19)}
-    for log in logs:
-        if log.timestamp.hour in hours_map:
-            hours_map[log.timestamp.hour] += 1
-
+    hours = sorted(timeline)
     return {
-        "courses": {"labels": labels_c, "data": values_c},
+        "courses": {
+            "labels": [str(course or "Sin curso") for course, _ in courses_data] or ["Sin datos"],
+            "data": [count for _, count in courses_data] or [0],
+        },
         "timeline": {
-            "labels": [f"{h}:00" for h in sorted(hours_map)],
-            "data": [hours_map[h] for h in sorted(hours_map)],
+            "labels": [f"{hour}:00" for hour in hours] or ["Sin datos"],
+            "data": [timeline[hour] for hour in hours] or [0],
         },
     }
 
@@ -121,19 +116,25 @@ def get_exit_details(
     date: str = Query(None),
     db: Session = Depends(database.get_db),
 ):
-    target_date = get_date_obj(date)
-    q = db.query(models.ExitLog).filter(cast(models.ExitLog.timestamp, Date) == target_date)
-    if type == "door" and id:
-        q = q.filter(models.ExitLog.door_id == id)
+    target_date = parse_date(date)
+    start_filter, end_filter = _exit_range(target_date)
 
-    logs = q.order_by(models.ExitLog.timestamp.desc()).all()
+    query = (
+        db.query(models.ExitLog)
+        .filter(start_filter, end_filter)
+        .options(joinedload(models.ExitLog.student))
+    )
+    if type == "door" and id:
+        query = query.filter(models.ExitLog.door_id == id)
+
+    logs = query.order_by(models.ExitLog.timestamp.desc()).all()
     return [
         {
-            "photo": photo_url(log.student.photo_path, "students"),
-            "name": log.student.full_name,
-            "course": log.student.course,
+            "photo": photo_url(log.student.photo_path, "students") if log.student else None,
+            "name": log.student_name or (log.student.full_name if log.student else "Desconocido"),
+            "course": log.course or (log.student.course if log.student else ""),
             "time": log.timestamp.strftime("%I:%M:%S %p"),
-            "door": log.door.name,
+            "door": log.door_name or "",
         }
         for log in logs
     ]
@@ -149,23 +150,37 @@ def get_exit_details(
     dependencies=[Depends(deps.require_lunch_access)],
 )
 def get_lunch_stats(date: str = Query(None), db: Session = Depends(database.get_db)):
-    target_date = get_date_obj(date)
+    target_date = parse_date(date)
 
-    # Query base filtrado por fecha
-    base_q = db.query(models.LunchLog).filter(cast(models.LunchLog.timestamp, Date) == target_date)
+    rows = (
+        db.query(models.LunchLog.delivered_type, func.count(models.LunchLog.id))
+        .filter(models.LunchLog.service_date == target_date)
+        .group_by(models.LunchLog.delivered_type)
+        .all()
+    )
+    type_counts = dict(rows)
 
-    total = base_q.count()
-    normal = base_q.filter(models.LunchLog.delivered_type == "Normal").count()
-    special = base_q.filter(models.LunchLog.delivered_type == "Especial").count()
-
-    # Estudiantes vs Empleados
-    students_count = base_q.filter(models.LunchLog.student_id.is_not(None)).count()
-    employees_count = base_q.filter(models.LunchLog.employee_id.is_not(None)).count()
+    students_count = (
+        db.query(models.LunchLog)
+        .filter(
+            models.LunchLog.service_date == target_date,
+            models.LunchLog.student_id.is_not(None),
+        )
+        .count()
+    )
+    employees_count = (
+        db.query(models.LunchLog)
+        .filter(
+            models.LunchLog.service_date == target_date,
+            models.LunchLog.employee_id.is_not(None),
+        )
+        .count()
+    )
 
     return {
-        "total": total,
-        "normal": normal,
-        "special": special,
+        "total": sum(type_counts.values()),
+        "normal": type_counts.get("Normal", 0),
+        "special": type_counts.get("Especial", 0),
         "by_person": {"students": students_count, "employees": employees_count},
     }
 
@@ -175,50 +190,35 @@ def get_lunch_stats(date: str = Query(None), db: Session = Depends(database.get_
     dependencies=[Depends(deps.require_lunch_access)],
 )
 def get_lunch_charts(date: str = Query(None), db: Session = Depends(database.get_db)):
-    target_date = get_date_obj(date)
+    target_date = parse_date(date)
 
-    # 1. Timeline (Por hora)
-    logs = (
+    rows = (
         db.query(models.LunchLog.timestamp)
-        .filter(cast(models.LunchLog.timestamp, Date) == target_date)
+        .filter(models.LunchLog.service_date == target_date)
         .all()
     )
-    hours_map = {h: 0 for h in range(11, 15)}  # Almuerzos suelen ser 11am - 2pm (ajustable)
+    timeline = defaultdict(int)
+    for (timestamp,) in rows:
+        timeline[timestamp.hour] += 1
 
-    for log in logs:
-        h = log.timestamp.hour
-        if h in hours_map:
-            hours_map[h] += 1
-        elif h < 11 and 11 in hours_map:
-            hours_map[11] += 1  # Agrupar tempraneros
-        elif h > 14 and 14 in hours_map:
-            hours_map[14] += 1  # Agrupar tardíos
-
-    # 2. Distribución (Normal vs Especial)
-    # Ya lo tenemos en stats, pero lo reenviamos para la gráfica
-    n_count = (
-        db.query(models.LunchLog)
-        .filter(
-            cast(models.LunchLog.timestamp, Date) == target_date,
-            models.LunchLog.delivered_type == "Normal",
-        )
-        .count()
+    hours = sorted(timeline)
+    distribution = (
+        db.query(models.LunchLog.delivered_type, func.count(models.LunchLog.id))
+        .filter(models.LunchLog.service_date == target_date)
+        .group_by(models.LunchLog.delivered_type)
+        .all()
     )
-    s_count = (
-        db.query(models.LunchLog)
-        .filter(
-            cast(models.LunchLog.timestamp, Date) == target_date,
-            models.LunchLog.delivered_type == "Especial",
-        )
-        .count()
-    )
+    dist_map = dict(distribution)
 
     return {
         "timeline": {
-            "labels": [f"{h}:00" for h in sorted(hours_map)],
-            "data": [hours_map[h] for h in sorted(hours_map)],
+            "labels": [f"{hour}:00" for hour in hours] or ["Sin datos"],
+            "data": [timeline[hour] for hour in hours] or [0],
         },
-        "distribution": {"labels": ["Normal", "Especial"], "data": [n_count, s_count]},
+        "distribution": {
+            "labels": ["Normal", "Especial"],
+            "data": [dist_map.get("Normal", 0), dist_map.get("Especial", 0)],
+        },
     }
 
 
@@ -229,38 +229,42 @@ def get_lunch_charts(date: str = Query(None), db: Session = Depends(database.get
 def get_lunch_details(
     type: str = Query(...), date: str = Query(None), db: Session = Depends(database.get_db)
 ):
-    target_date = get_date_obj(date)
-    q = db.query(models.LunchLog).filter(cast(models.LunchLog.timestamp, Date) == target_date)
+    target_date = parse_date(date)
 
+    query = (
+        db.query(models.LunchLog)
+        .filter(models.LunchLog.service_date == target_date)
+        .options(
+            joinedload(models.LunchLog.student),
+            joinedload(models.LunchLog.employee),
+        )
+    )
     if type == "Normal":
-        q = q.filter(models.LunchLog.delivered_type == "Normal")
+        query = query.filter(models.LunchLog.delivered_type == "Normal")
     elif type == "Especial":
-        q = q.filter(models.LunchLog.delivered_type == "Especial")
+        query = query.filter(models.LunchLog.delivered_type == "Especial")
 
-    logs = q.order_by(models.LunchLog.timestamp.desc()).all()
+    logs = query.order_by(models.LunchLog.timestamp.desc()).all()
 
     data = []
     for log in logs:
-        if log.student:
-            name = log.student.full_name
-            photo = photo_url(log.student.photo_path, "students")
-            extra = log.student.course
-        elif log.employee:
-            name = log.employee.full_name
-            photo = photo_url(log.employee.photo_path, "employees")
-            extra = log.employee.position
+        if log.student_id:
+            person = log.student
+            photo = photo_url(person.photo_path, "students") if person else None
+            extra = log.person_extra or (person.course if person else "")
         else:
-            name = "?"
-            photo = None
-            extra = ""
+            person = log.employee
+            photo = photo_url(person.photo_path, "employees") if person else None
+            extra = log.person_extra or (person.position if person else "")
 
         data.append(
             {
                 "photo": photo,
-                "name": name,
+                "name": log.person_name or (person.full_name if person else "?"),
                 "extra": extra,
                 "time": log.timestamp.strftime("%I:%M:%S %p"),
                 "type": log.delivered_type,
+                "public_id": log.public_id,
             }
         )
     return data
