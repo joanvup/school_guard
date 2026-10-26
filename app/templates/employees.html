@@ -97,11 +97,12 @@
                     <td class="px-5 py-2 border-b border-gray-200 text-sm">
                         <div class="flex-shrink-0 w-10 h-10">
                             {% if e.photo_path %}
-                            <img class="w-full h-full rounded-full object-cover border" src="/media/photos/employees/{{ e.photo_path }}"
-                                onerror="this.src='https://ui-avatars.com/api/?name={{ e.full_name }}'">
+                            <img class="w-full h-full rounded-full object-cover border"
+                                src="/media/photos/employees/{{ e.photo_path }}"
+                                data-fallback="/static/assets/avatar.png" alt="{{ e.full_name }}">
                             {% else %}
                             <img class="w-full h-full rounded-full object-cover border"
-                                src="https://ui-avatars.com/api/?name={{ e.full_name }}">
+                                src="/static/assets/avatar.png" alt="{{ e.full_name }}">
                             {% endif %}
                         </div>
                     </td>
@@ -210,7 +211,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     function openUploadModal(actionUrl, hintText) {
         document.getElementById('modalUpload').classList.remove('hidden');
         document.getElementById('uploadForm').action = actionUrl;

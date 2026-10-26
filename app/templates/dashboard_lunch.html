@@ -102,7 +102,7 @@
 </div>
 
 <script src="/static/js/chart.min.js"></script>
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     const AVATAR_PLACEHOLDER = '/static/assets/avatar.png';
     let chart1 = null;
     let chart2 = null;

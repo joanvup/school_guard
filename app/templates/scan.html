@@ -65,7 +65,7 @@
 <!-- Librería QR Local -->
 <script src="/static/js/html5-qrcode.min.js"></script>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     const PLACEHOLDER_PHOTO = '/static/assets/avatar.png';
     let isProcessing = false;
     let html5QrcodeScanner = null;

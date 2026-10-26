@@ -3,6 +3,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from . import deps
+from .config import settings
 from .csrf import csrf_cookie_middleware, verify_csrf
 from .routers import (
     auth,
@@ -17,8 +18,16 @@ from .routers import (
     students,
     users,
 )
+from .security import security_headers_middleware
 
-app = FastAPI(title="School Guard", dependencies=[Depends(verify_csrf)])
+docs_enabled = not settings.is_production
+app = FastAPI(
+    title="School Guard",
+    dependencies=[Depends(verify_csrf)],
+    docs_url="/docs" if docs_enabled else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if docs_enabled else None,
+)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -46,6 +55,7 @@ async def add_user_to_request(request: Request, call_next):
 
 
 app.middleware("http")(csrf_cookie_middleware)
+app.middleware("http")(security_headers_middleware)
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)

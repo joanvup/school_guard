@@ -144,7 +144,7 @@
     </div>
 
     <script src="/static/js/qrcode.min.js"></script>
-    <script>
+    <script nonce="{{ request.state.csp_nonce }}">
         const qrContainer = document.getElementById('ticket-qr');
         try {
             new QRCode(qrContainer, {

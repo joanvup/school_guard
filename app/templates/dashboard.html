@@ -108,7 +108,7 @@
 </div>
 
 <script src="/static/js/chart.min.js"></script>
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     const AVATAR_PLACEHOLDER = '/static/assets/avatar.png';
     let chartTimelineInstance = null;
     let chartCoursesInstance = null;

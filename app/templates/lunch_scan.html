@@ -172,7 +172,7 @@
 <script src="/static/js/html5-qrcode.min.js"></script>
 <script src="/static/js/qrcode.min.js"></script>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
     const PLACEHOLDER_PHOTO = '/static/assets/avatar.png';
     const rfidInput = document.getElementById('rfidInput');
     const inputStatus = document.getElementById('inputStatus');
