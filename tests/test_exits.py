@@ -1,8 +1,23 @@
+from sqlalchemy.orm import Session
+
 from app import auth, models
 from app.database import SessionLocal
 from app.services.qr import sign_qr_v2
 from tests.conftest import USER_PASSWORD
 from tests.helpers import csrf_headers, create_employee, create_student, get_door_id, login
+
+
+def _first_commit_raises(monkeypatch, error: Exception):
+    original = Session.commit
+    calls = {"count": 0}
+
+    def flaky_commit(self, *args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise error
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "commit", flaky_commit)
 
 
 def _scan(client, student, door_id=None, code=None):
@@ -200,3 +215,23 @@ def test_invalid_scan_payload_returns_422(client):
     assert empty.status_code == 422
     assert invalid_door.status_code == 422
     assert missing_door.status_code == 422
+
+
+def test_commit_error_is_reported_and_audited(client, monkeypatch):
+    login(client, "operator", USER_PASSWORD)
+    student = create_student(student_id="S204")
+    _first_commit_raises(monkeypatch, RuntimeError("fallo de escritura"))
+
+    response = _scan(client, student)
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["message"] == "ERROR INTERNO AL REGISTRAR LA SALIDA"
+
+    db = SessionLocal()
+    try:
+        assert db.query(models.ExitLog).count() == 0
+        assert db.query(models.ScanAttempt).filter_by(result="error").count() == 1
+    finally:
+        db.close()
