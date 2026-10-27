@@ -133,7 +133,11 @@
                         </div>
                     </td>
                     <td class="px-5 py-2 border-b border-gray-200 text-sm font-mono">{{ s.student_id }}</td>
-                    <td class="px-5 py-2 border-b border-gray-200 text-sm font-bold text-gray-700">{{ s.full_name }}
+                    <td class="px-5 py-2 border-b border-gray-200 text-sm font-bold text-gray-700">
+                        {{ s.full_name }}
+                        {% if not s.is_active %}
+                        <span class="ml-1 px-2 py-0.5 rounded text-xs font-bold bg-red-200 text-red-800">INACTIVO</span>
+                        {% endif %}
                     </td>
                     <td class="px-5 py-2 border-b border-gray-200 text-sm">{{ s.course }}</td>
 
@@ -180,7 +184,7 @@
                             class="text-blue-600 hover:text-blue-900 mx-1" title="Carnet PDF"><i
                                 class="fas fa-id-card"></i></a>
                         <form action="/students/delete/{{ s.id }}" method="POST" class="inline"
-                            onsubmit="return confirm('¿Eliminar estudiante?')">
+                            onsubmit="return confirm('¿Eliminar estudiante? Si tiene historial se desactivará.')">
                             <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                             <button type="submit" class="text-red-600 hover:text-red-900 mx-1" title="Eliminar">
                                 <i class="fas fa-trash"></i>

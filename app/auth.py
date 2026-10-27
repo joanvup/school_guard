@@ -16,12 +16,47 @@ __all__ = [
     "get_password_hash",
     "login_limiter",
     "sign_qr_content",
+    "validate_password",
     "verify_password",
     "verify_qr_content",
 ]
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 DUMMY_HASH = pwd_context.hash("dummy-password-for-timing")
+
+COMMON_PASSWORDS = {
+    "123456789012",
+    "contrasena123",
+    "contraseña123",
+    "password1234",
+    "qwertyuiop12",
+    "administrador",
+    "administrador123",
+    "colegio123456",
+    "schoolguard123",
+    "passwordpassword",
+    "1234567890ab",
+}
+
+
+def validate_password(password: str, *, username: str | None = None) -> None:
+    if not password or password != password.strip():
+        raise ValueError(
+            "La contraseña no puede estar vacía ni tener espacios al inicio o al final"
+        )
+    minimum = settings.password_min_length
+    if len(password) < minimum:
+        raise ValueError(f"La contraseña debe tener al menos {minimum} caracteres")
+    if len(password) > 128:
+        raise ValueError("La contraseña no puede superar los 128 caracteres")
+    if password.lower() in COMMON_PASSWORDS:
+        raise ValueError("La contraseña es demasiado común; elija otra")
+    if username and username.strip() and username.strip().lower() in password.lower():
+        raise ValueError("La contraseña no puede contener el nombre de usuario")
+    if not any(char.isalpha() for char in password) or not any(char.isdigit() for char in password):
+        raise ValueError("La contraseña debe incluir letras y números")
+    if len(set(password)) < 5:
+        raise ValueError("La contraseña es demasiado simple")
 
 
 def verify_password(plain_password, hashed_password):

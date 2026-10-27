@@ -3,26 +3,33 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from typing import Optional
+from urllib.parse import quote_plus
 import pandas as pd
 import io
-import os
-import shutil
-import zipfile
-from .. import database, models, deps
-from ..config import settings
-from ..services.audit import add_audit
-from ..utils.data import clean_text, normalize_excel_id, normalize_rfid
-from starlette.requests import Request
 import math
 from sqlalchemy import or_
+from starlette.requests import Request
+from .. import database, models, deps
+from ..services.audit import add_audit
+from ..utils.data import clean_text, normalize_excel_id, normalize_rfid
+from ..utils.media import (
+    UploadError,
+    normalize_photo,
+    read_upload,
+    store_photo,
+    zip_photo_entries,
+)
 
 router = APIRouter(
     prefix="/students", tags=["Students"], dependencies=[Depends(deps.require_admin)]
 )
 
 templates = Jinja2Templates(directory="app/templates")
-PHOTOS_DIR = settings.media_photos_dir / "students"
-PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _error(message: str) -> RedirectResponse:
+    return RedirectResponse(url=f"/students?error={quote_plus(message)}", status_code=303)
+
 
 # --- VISTAS ---
 
@@ -85,6 +92,7 @@ def list_students(
 
 @router.post("/create")
 def create_student(
+    request: Request,
     student_id: str = Form(...),
     full_name: str = Form(...),
     course: str = Form(...),
@@ -95,64 +103,84 @@ def create_student(
     # Verificar duplicados
     student_id = normalize_excel_id(student_id)
     if not student_id:
-        return RedirectResponse(url="/students?error=ID+invalido", status_code=303)
+        return _error("ID inválido")
     if db.query(models.Student).filter(models.Student.student_id == student_id).first():
-        return RedirectResponse(url="/students?msg=Error:+ID+Duplicado", status_code=303)
+        return _error("ID duplicado")
 
-    photo_path = None
-
-    # Procesar foto individual si se subió
+    photo_data = None
     if photo and photo.filename:
-        # Guardamos la foto con el nombre del ID para mantener orden: 202301.jpg
-        extension = photo.filename.split(".")[-1].lower()
-        if extension not in ["jpg", "jpeg", "png"]:
-            return RedirectResponse(url="/students?error=Solo+imagenes+JPG/PNG", status_code=303)
-
-        filename = f"{student_id}.{extension}"
-        file_location = PHOTOS_DIR / filename
-
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(photo.file, buffer)
-
-        photo_path = filename
+        try:
+            photo_data = normalize_photo(photo)
+        except UploadError as exc:
+            return _error(str(exc))
 
     new_student = models.Student(
         student_id=student_id,
         full_name=full_name,
         course=course,
         is_authorized=is_authorized,
-        photo_path=photo_path,
     )
+    if photo_data is not None:
+        try:
+            new_student.photo_path = store_photo("students", student_id, *photo_data)
+        except (UploadError, OSError):
+            return _error("No se pudo guardar la foto")
+
     db.add(new_student)
+    db.flush()
+    add_audit(
+        db,
+        action="student.created",
+        actor_id=request.state.user.id,
+        entity_type="student",
+        entity_id=new_student.id,
+        details={
+            "student_id": new_student.student_id,
+            "is_authorized": bool(new_student.is_authorized),
+        },
+        request=request,
+    )
     db.commit()
     return RedirectResponse(url="/students", status_code=303)
 
 
 @router.post("/delete/{id}")
-def delete_student(id: int, db: Session = Depends(database.get_db)):
+def delete_student(id: int, request: Request, db: Session = Depends(database.get_db)):
     student = db.query(models.Student).filter(models.Student.id == id).first()
     if not student:
-        return RedirectResponse(url="/students?error=Estudiante+no+encontrado", status_code=303)
+        return _error("Estudiante no encontrado")
 
-    # 1. Verificar Historial de Almuerzos
     lunch_count = db.query(models.LunchLog).filter(models.LunchLog.student_id == id).count()
-    if lunch_count > 0:
-        return RedirectResponse(
-            url="/students?error=Error:+El+estudiante+tiene+historial+de+almuerzos.",
-            status_code=303,
-        )
-
-    # 2. Verificar Historial de Salidas
     exit_count = db.query(models.ExitLog).filter(models.ExitLog.student_id == id).count()
-    if exit_count > 0:
-        return RedirectResponse(
-            url="/students?error=Error:+El+estudiante+tiene+historial+de+salidas.", status_code=303
-        )
+    scan_count = db.query(models.ScanAttempt).filter(models.ScanAttempt.student_id == id).count()
+    has_history = lunch_count > 0 or exit_count > 0 or scan_count > 0
 
-    # Si está limpio, borrar
-    db.delete(student)
+    student_label = student.student_id
+    if has_history:
+        student.is_active = False
+        action = "student.deactivated"
+        message = "Estudiante desactivado para conservar el historial"
+    else:
+        db.delete(student)
+        action = "student.deleted"
+        message = "Estudiante eliminado"
+
+    add_audit(
+        db,
+        action=action,
+        actor_id=request.state.user.id,
+        entity_type="student",
+        entity_id=id,
+        details={
+            "student_id": student_label,
+            "lunch_records": lunch_count,
+            "exit_records": exit_count,
+            "scan_records": scan_count,
+        },
+        request=request,
+    )
     db.commit()
-    return RedirectResponse(url="/students?msg=Estudiante+eliminado", status_code=303)
+    return RedirectResponse(url=f"/students?msg={quote_plus(message)}", status_code=303)
 
 
 @router.post("/toggle_auth/{id}")
@@ -200,10 +228,14 @@ def download_template():
 def import_students(
     request: Request, file: UploadFile = File(...), db: Session = Depends(database.get_db)
 ):
-    if not file.filename.endswith((".xls", ".xlsx")):
-        return RedirectResponse(url="/students?error=Formato+invalido", status_code=303)
+    if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
+        return _error("Formato inválido")
 
-    contents = file.file.read()
+    try:
+        contents = read_upload(file)
+    except UploadError as exc:
+        return _error(str(exc))
+
     try:
         df = pd.read_excel(io.BytesIO(contents), dtype=str)
         count = 0
@@ -251,64 +283,58 @@ def import_students(
 
 
 @router.post("/import-photos")
-def import_photos_zip(file: UploadFile = File(...), db: Session = Depends(database.get_db)):
-    if not file.filename.endswith(".zip"):
-        return RedirectResponse(url="/students?error=Debe+ser+un+archivo+ZIP", status_code=303)
+def import_photos_zip(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+):
+    if not (file.filename or "").lower().endswith(".zip"):
+        return _error("Debe ser un archivo ZIP")
 
     try:
-        content = file.file.read()
-        zip_buffer = io.BytesIO(content)
+        photos = zip_photo_entries(file)
+    except UploadError as exc:
+        return _error(str(exc))
+    except (OSError, ValueError):
+        return _error("Error al procesar el ZIP")
 
-        processed_count = 0
+    processed_count = 0
+    skipped = 0
+    for stem, data, suffix in photos:
+        student_id = normalize_excel_id(stem)
+        if not student_id:
+            skipped += 1
+            continue
 
-        with zipfile.ZipFile(zip_buffer, "r") as zip_ref:
-            # Obtener lista de archivos en el ZIP
-            for file_name in zip_ref.namelist():
-                # Ignorar carpetas o archivos ocultos (__MACOSX, etc)
-                if file_name.startswith("__") or file_name.endswith("/"):
-                    continue
+        student = db.query(models.Student).filter(models.Student.student_id == student_id).first()
+        if not student:
+            skipped += 1
+            continue
 
-                # Extraer nombre base (ID) y extensión
-                # Ejemplo: "fotos/1001.jpg" -> "1001.jpg"
-                base_name = os.path.basename(file_name)
-                name_parts = os.path.splitext(base_name)
+        try:
+            student.photo_path = store_photo("students", student_id, data, suffix)
+        except (UploadError, OSError):
+            skipped += 1
+            continue
+        processed_count += 1
 
-                if len(name_parts) < 2:
-                    continue
-
-                student_id = normalize_excel_id(name_parts[0])
-                if not student_id:
-                    continue
-                ext = name_parts[1].lower()
-
-                if ext not in [".jpg", ".jpeg", ".png"]:
-                    continue
-
-                # Buscar estudiante por ID
-                student = (
-                    db.query(models.Student).filter(models.Student.student_id == student_id).first()
-                )
-
-                if student:
-                    # Guardar archivo
-                    target_filename = f"{student_id}{ext}"
-                    target_path = PHOTOS_DIR / target_filename
-
-                    with open(target_path, "wb") as f:
-                        f.write(zip_ref.read(file_name))
-
-                    # Actualizar BD
-                    student.photo_path = target_filename
-                    processed_count += 1
-
-        db.commit()
-        return RedirectResponse(
-            url=f"/students?msg=Fotos+actualizadas:+{processed_count}", status_code=303
-        )
-
-    except Exception as e:
-        print(f"Error ZIP: {e}")
-        return RedirectResponse(url="/students?error=Error+al+procesar+ZIP", status_code=303)
+    add_audit(
+        db,
+        action="students.photos_imported",
+        actor_id=request.state.user.id,
+        entity_type="student",
+        details={
+            "processed": processed_count,
+            "skipped": skipped,
+            "filename": file.filename,
+        },
+        request=request,
+    )
+    db.commit()
+    message = f"Fotos actualizadas: {processed_count}"
+    if skipped:
+        message += f" ({skipped} omitidas)"
+    return RedirectResponse(url=f"/students?msg={quote_plus(message)}", status_code=303)
 
 
 # --- ACTUALIZACIONES ESPECÍFICAS (ALMUERZOS / RFID) ---
@@ -322,10 +348,10 @@ def update_lunch_groups_students(
     Excel: Col 0 -> Student ID, Col 1 -> Grupos (Texto)
     Busca 'ALMUERZO NORMAL' o 'ALMUERZO ESPECIAL'
     """
-    if not file.filename.endswith((".xls", ".xlsx")):
-        return RedirectResponse("/students?error=Formato+invalido", 303)
+    if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
+        return _error("Formato inválido")
     try:
-        content = file.file.read()
+        content = read_upload(file)
         df = pd.read_excel(io.BytesIO(content), dtype=str)
         updated = 0
         skipped = 0
@@ -367,12 +393,16 @@ def update_lunch_groups_students(
 
 
 @router.post("/update-rfid")
-def update_rfid_students(file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+def update_rfid_students(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+):
     """Excel: Col 0 -> Student ID, Col 1 -> RFID Code"""
-    if not file.filename.endswith((".xls", ".xlsx")):
-        return RedirectResponse("/students?error=Formato+invalido", 303)
+    if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
+        return _error("Formato inválido")
     try:
-        df = pd.read_excel(io.BytesIO(file.file.read()), dtype=str)
+        df = pd.read_excel(io.BytesIO(read_upload(file)), dtype=str)
         updated = 0
         skipped = 0
         seen_rfid: set[str] = set()
@@ -402,10 +432,18 @@ def update_rfid_students(file: UploadFile = File(...), db: Session = Depends(dat
             seen_rfid.add(rfid)
             student.rfid_code = rfid
             updated += 1
+        add_audit(
+            db,
+            action="students.rfid_imported",
+            actor_id=request.state.user.id,
+            entity_type="student",
+            details={"updated": updated, "skipped": skipped, "filename": file.filename},
+            request=request,
+        )
         db.commit()
-        message = f"RFIDs+actualizados:+{updated}"
+        message = f"RFIDs actualizados: {updated}"
         if skipped:
-            message += f"+({skipped}+omitidos)"
-        return RedirectResponse(f"/students?msg={message}", 303)
+            message += f" ({skipped} omitidos)"
+        return RedirectResponse(f"/students?msg={quote_plus(message)}", 303)
     except Exception:
-        return RedirectResponse("/students?error=Error+archivo", 303)
+        return _error("Error al procesar el archivo")

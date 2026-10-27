@@ -107,7 +107,12 @@
                         </div>
                     </td>
                     <td class="px-5 py-2 border-b border-gray-200 text-sm font-mono">{{ e.doc_id }}</td>
-                    <td class="px-5 py-2 border-b border-gray-200 text-sm font-bold">{{ e.full_name }}</td>
+                    <td class="px-5 py-2 border-b border-gray-200 text-sm font-bold">
+                        {{ e.full_name }}
+                        {% if not e.is_active %}
+                        <span class="ml-1 px-2 py-0.5 rounded text-xs font-bold bg-red-200 text-red-800">INACTIVO</span>
+                        {% endif %}
+                    </td>
                     <td class="px-5 py-2 border-b border-gray-200 text-sm">{{ e.position }}</td>
                     <td class="px-5 py-2 border-b border-gray-200 text-center text-sm">
                         {% if e.has_lunch %}
@@ -138,7 +143,7 @@
                         </button>
                         <!-- Botón Borrar -->
                         <form action="/employees/delete/{{ e.id }}" method="POST" class="inline"
-                            onsubmit="return confirm('¿Borrar?')">
+                            onsubmit="return confirm('¿Eliminar empleado? Si tiene historial se desactivará.')">
                             <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                             <button type="submit" class="text-red-600 hover:text-red-900 mx-1">
                                 <i class="fas fa-trash"></i>

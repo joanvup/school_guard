@@ -3,22 +3,25 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from urllib.parse import quote_plus
 import pandas as pd
 import io
 import math
-import shutil
 from typing import Optional
 from .. import database, models, deps
-from ..config import settings
+from ..services.audit import add_audit
 from ..utils.data import clean_text, normalize_excel_id, normalize_rfid
+from ..utils.media import UploadError, normalize_photo, read_upload, store_photo
 
 router = APIRouter(
     prefix="/employees", tags=["Employees"], dependencies=[Depends(deps.require_admin)]
 )
 
 templates = Jinja2Templates(directory="app/templates")
-PHOTOS_DIR = settings.media_photos_dir / "employees"
-PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _error(message: str) -> RedirectResponse:
+    return RedirectResponse(url=f"/employees?error={quote_plus(message)}", status_code=303)
 
 
 # --- VISTA LISTADO ---
@@ -67,6 +70,7 @@ def list_employees(
 
 @router.post("/create")
 def create_employee(
+    request: Request,
     doc_id: str = Form(...),
     full_name: str = Form(...),
     position: str = Form(None),
@@ -77,27 +81,21 @@ def create_employee(
 ):
     doc_id = normalize_excel_id(doc_id)
     if not doc_id:
-        return RedirectResponse(url="/employees?error=Cédula+inválida", status_code=303)
+        return _error("Cédula inválida")
     if db.query(models.Employee).filter(models.Employee.doc_id == doc_id).first():
-        return RedirectResponse(url="/employees?error=Cédula+ya+existe", status_code=303)
+        return _error("Cédula ya existe")
 
-    photo_path = None
+    photo_data = None
     if photo and photo.filename:
-        ext = photo.filename.split(".")[-1].lower()
-        if ext in ["jpg", "jpeg", "png"]:
-            filename = f"EMP_{doc_id}.{ext}"
-            file_location = PHOTOS_DIR / filename
-            with open(file_location, "wb") as buffer:
-                shutil.copyfileobj(photo.file, buffer)
-            photo_path = filename
+        try:
+            photo_data = normalize_photo(photo)
+        except UploadError as exc:
+            return _error(str(exc))
 
-    # --- CORRECCIÓN AQUÍ ---
-    # Convertimos el string "Normal" al objeto Enum <LunchType.NORMAL>
     try:
         enum_obj = models.LunchType(lunch_type)
-        lunch_value = enum_obj.value  # Extraemos "Normal" o "Especial"
+        lunch_value = enum_obj.value
     except ValueError:
-        # Si por alguna razón llega un valor raro, asignamos NONE o NORMAL por defecto
         lunch_value = "Ninguno"
 
     new_emp = models.Employee(
@@ -106,46 +104,83 @@ def create_employee(
         position=position,
         has_lunch=has_lunch,
         lunch_type=lunch_value,
-        photo_path=photo_path,
     )
+    if photo_data is not None:
+        try:
+            new_emp.photo_path = store_photo("employees", f"EMP_{doc_id}", *photo_data)
+        except (UploadError, OSError):
+            return _error("No se pudo guardar la foto")
+
     db.add(new_emp)
+    db.flush()
+    add_audit(
+        db,
+        action="employee.created",
+        actor_id=request.state.user.id,
+        entity_type="employee",
+        entity_id=new_emp.id,
+        details={
+            "doc_id": new_emp.doc_id,
+            "has_lunch": bool(new_emp.has_lunch),
+            "lunch_type": new_emp.lunch_type,
+        },
+        request=request,
+    )
     db.commit()
     return RedirectResponse(url="/employees?msg=Empleado+creado", status_code=303)
 
 
 @router.post("/delete/{id}")
-def delete_employee(id: int, db: Session = Depends(database.get_db)):
+def delete_employee(id: int, request: Request, db: Session = Depends(database.get_db)):
     emp = db.query(models.Employee).filter(models.Employee.id == id).first()
     if not emp:
-        return RedirectResponse(url="/employees?error=Empleado+no+encontrado", status_code=303)
+        return _error("Empleado no encontrado")
 
-    # VERIFICACIÓN DE INTEGRIDAD
-    # Contamos si tiene registros de almuerzo asociados
-    has_records = db.query(models.LunchLog).filter(models.LunchLog.employee_id == id).count()
+    lunch_records = db.query(models.LunchLog).filter(models.LunchLog.employee_id == id).count()
+    scan_records = db.query(models.ScanAttempt).filter(models.ScanAttempt.employee_id == id).count()
+    has_history = lunch_records > 0 or scan_records > 0
 
-    if has_records > 0:
-        return RedirectResponse(
-            url="/employees?error=No+se+puede+eliminar:+El+empleado+tiene+historial+de+almuerzos.",
-            status_code=303,
-        )
+    doc_id = emp.doc_id
+    if has_history:
+        emp.is_active = False
+        action = "employee.deactivated"
+        message = "Empleado desactivado para conservar el historial"
+    else:
+        db.delete(emp)
+        action = "employee.deleted"
+        message = "Empleado eliminado"
 
-    # Si no tiene registros, procedemos a borrar
-    db.delete(emp)
+    add_audit(
+        db,
+        action=action,
+        actor_id=request.state.user.id,
+        entity_type="employee",
+        entity_id=id,
+        details={
+            "doc_id": doc_id,
+            "lunch_records": lunch_records,
+            "scan_records": scan_records,
+        },
+        request=request,
+    )
     db.commit()
-
-    return RedirectResponse(url="/employees?msg=Empleado+eliminado", status_code=303)
+    return RedirectResponse(url=f"/employees?msg={quote_plus(message)}", status_code=303)
 
 
 # --- IMPORTACIONES ---
 
 
 @router.post("/import-basic")
-def import_basic(file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+def import_basic(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+):
     """Carga inicial de empleados (ID, Nombre, Cargo)"""
-    if not file.filename.endswith((".xls", ".xlsx")):
-        return RedirectResponse("/employees?error=Formato+invalido", 303)
+    if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
+        return _error("Formato inválido")
     try:
-        df = pd.read_excel(io.BytesIO(file.file.read()), dtype=str)
+        df = pd.read_excel(io.BytesIO(read_upload(file)), dtype=str)
         count = 0
         skipped = 0
         for _, row in df.iterrows():
@@ -162,6 +197,14 @@ def import_basic(file: UploadFile = File(...), db: Session = Depends(database.ge
                 count += 1
             else:
                 skipped += 1
+        add_audit(
+            db,
+            action="employees.imported",
+            actor_id=request.state.user.id,
+            entity_type="employee",
+            details={"processed": count, "skipped": skipped, "filename": file.filename},
+            request=request,
+        )
         db.commit()
         message = f"Creados+{count}+empleados"
         if skipped:
@@ -172,15 +215,19 @@ def import_basic(file: UploadFile = File(...), db: Session = Depends(database.ge
 
 
 @router.post("/update-lunch-groups")
-def update_lunch_groups(file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+def update_lunch_groups(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+):
     """
     Actualiza permisos de almuerzo basado en columna 'grupos'.
     Logica: Busca 'ALMUERZO NORMAL' o 'ALMUERZO ESPECIAL'.
     """
-    if not file.filename.endswith((".xls", ".xlsx")):
-        return RedirectResponse("/employees?error=Formato+invalido", 303)
+    if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
+        return _error("Formato inválido")
     try:
-        df = pd.read_excel(io.BytesIO(file.file.read()), dtype=str)
+        df = pd.read_excel(io.BytesIO(read_upload(file)), dtype=str)
         updated = 0
         skipped = 0
 
@@ -206,20 +253,31 @@ def update_lunch_groups(file: UploadFile = File(...), db: Session = Depends(data
                     emp.lunch_type = models.LunchType.NONE.value
                 updated += 1
 
+        add_audit(
+            db,
+            action="employees.lunch_groups_imported",
+            actor_id=request.state.user.id,
+            entity_type="employee",
+            details={"updated": updated, "skipped": skipped, "filename": file.filename},
+            request=request,
+        )
         db.commit()
         return RedirectResponse(f"/employees?msg=Almuerzos+actualizados:+{updated}", 303)
-    except Exception as e:
-        print(e)
-        return RedirectResponse("/employees?error=Error+procesando+grupos", 303)
+    except Exception:
+        return _error("Error procesando grupos")
 
 
 @router.post("/update-rfid")
-def update_rfid(file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+def update_rfid(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+):
     """Actualiza solo el código RFID. Col 0: ID, Col 1: RFID"""
-    if not file.filename.endswith((".xls", ".xlsx")):
-        return RedirectResponse("/employees?error=Formato+invalido", 303)
+    if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
+        return _error("Formato inválido")
     try:
-        df = pd.read_excel(io.BytesIO(file.file.read()), dtype=str)
+        df = pd.read_excel(io.BytesIO(read_upload(file)), dtype=str)
         updated = 0
         skipped = 0
         seen_rfid: set[str] = set()
@@ -249,17 +307,26 @@ def update_rfid(file: UploadFile = File(...), db: Session = Depends(database.get
             seen_rfid.add(rfid)
             emp.rfid_code = rfid
             updated += 1
+        add_audit(
+            db,
+            action="employees.rfid_imported",
+            actor_id=request.state.user.id,
+            entity_type="employee",
+            details={"updated": updated, "skipped": skipped, "filename": file.filename},
+            request=request,
+        )
         db.commit()
-        message = f"RFIDs+actualizados:+{updated}"
+        message = f"RFIDs actualizados: {updated}"
         if skipped:
-            message += f"+({skipped}+omitidos)"
-        return RedirectResponse(f"/employees?msg={message}", 303)
+            message += f" ({skipped} omitidos)"
+        return RedirectResponse(f"/employees?msg={quote_plus(message)}", 303)
     except Exception:
-        return RedirectResponse("/employees?error=Error+archivo", 303)
+        return _error("Error al procesar el archivo")
 
 
 @router.post("/update")
 def update_employee(
+    request: Request,
     id: int = Form(...),
     doc_id: str = Form(...),
     full_name: str = Form(...),
@@ -271,11 +338,11 @@ def update_employee(
 ):
     emp = db.query(models.Employee).filter(models.Employee.id == id).first()
     if not emp:
-        return RedirectResponse(url="/employees?error=Empleado+no+encontrado", status_code=303)
+        return _error("Empleado no encontrado")
 
     doc_id = normalize_excel_id(doc_id)
     if not doc_id:
-        return RedirectResponse(url="/employees?error=Cédula+inválida", status_code=303)
+        return _error("Cédula inválida")
     duplicate = (
         db.query(models.Employee)
         .filter(
@@ -285,7 +352,14 @@ def update_employee(
         .first()
     )
     if duplicate:
-        return RedirectResponse(url="/employees?error=Cédula+ya+existe", status_code=303)
+        return _error("Cédula ya existe")
+
+    photo_data = None
+    if photo and photo.filename:
+        try:
+            photo_data = normalize_photo(photo)
+        except UploadError as exc:
+            return _error(str(exc))
 
     # Actualizar datos básicos
     emp.doc_id = doc_id
@@ -300,14 +374,25 @@ def update_employee(
         emp.lunch_type = "Ninguno"
 
     # Actualizar foto solo si se sube una nueva
-    if photo and photo.filename:
-        ext = photo.filename.split(".")[-1].lower()
-        if ext in ["jpg", "jpeg", "png"]:
-            filename = f"EMP_{doc_id}.{ext}"
-            file_location = PHOTOS_DIR / filename
-            with open(file_location, "wb") as buffer:
-                shutil.copyfileobj(photo.file, buffer)
-            emp.photo_path = filename
+    if photo_data is not None:
+        try:
+            emp.photo_path = store_photo("employees", f"EMP_{doc_id}", *photo_data)
+        except (UploadError, OSError):
+            return _error("No se pudo guardar la foto")
 
+    add_audit(
+        db,
+        action="employee.updated",
+        actor_id=request.state.user.id,
+        entity_type="employee",
+        entity_id=emp.id,
+        details={
+            "doc_id": emp.doc_id,
+            "has_lunch": bool(emp.has_lunch),
+            "lunch_type": emp.lunch_type,
+            "photo_updated": photo_data is not None,
+        },
+        request=request,
+    )
     db.commit()
     return RedirectResponse(url="/employees?msg=Empleado+actualizado", status_code=303)

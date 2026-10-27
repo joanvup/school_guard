@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     media_photos_dir: Path = Field(
         default=BASE_DIR / "app" / "data" / "photos", alias="MEDIA_PHOTOS_DIR"
     )
+    max_upload_mb: int = Field(default=5, alias="MAX_UPLOAD_MB", ge=1, le=100)
+    max_zip_entries: int = Field(default=1000, alias="MAX_ZIP_ENTRIES", ge=1, le=10000)
+    max_zip_total_mb: int = Field(default=200, alias="MAX_ZIP_TOTAL_MB", ge=1, le=2048)
+    password_min_length: int = Field(default=12, alias="PASSWORD_MIN_LENGTH", ge=8, le=128)
 
     @field_validator("database_url")
     @classmethod
