@@ -104,6 +104,7 @@ def get_ticket_detail(
 def print_ticket_view(
     public_id: str,
     request: Request,
+    autoprint: int = Query(0, ge=0, le=1),
     db: Session = Depends(database.get_db),
 ):
     log = get_ticket(db, public_id)
@@ -115,6 +116,7 @@ def print_ticket_view(
             "request": request,
             "ticket": ticket_payload(log),
             "user": request.state.user,
+            "autoprint": bool(autoprint),
         },
     )
 

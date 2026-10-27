@@ -180,7 +180,7 @@
                 alert('Advertencia: este ticket supera las 3 reimpresiones registradas.');
             }
             if (printWindow) {
-                printWindow.location = data.print_url;
+                printWindow.location = `${data.print_url}?autoprint=1`;
             } else {
                 window.location.href = data.print_url;
             }

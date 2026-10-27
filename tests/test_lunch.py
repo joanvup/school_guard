@@ -196,6 +196,12 @@ def test_ticket_lookup_and_reprint_increment_counter_and_audit(client):
     print_view = client.get(f"/lunch/tickets/{public_id}/print")
     assert print_view.status_code == 200
     assert public_id in print_view.text
+    assert "setTimeout(() => window.print(), 350)" not in print_view.text
+
+    autoprint_view = client.get(f"/lunch/tickets/{public_id}/print?autoprint=1")
+    assert autoprint_view.status_code == 200
+    assert "setTimeout(() => window.print(), 350)" in autoprint_view.text
+    assert client.get(f"/lunch/tickets/{public_id}/print?autoprint=2").status_code == 422
 
     db = SessionLocal()
     try:

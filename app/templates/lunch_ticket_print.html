@@ -159,9 +159,11 @@
             qrContainer.innerText = 'QR no disponible';
         }
 
+        {% if autoprint %}
         window.addEventListener('load', () => {
             setTimeout(() => window.print(), 350);
         });
+        {% endif %}
     </script>
 </body>
 </html>
