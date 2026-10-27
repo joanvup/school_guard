@@ -1,8 +1,13 @@
+import json
+import logging
+import sys
+
 from fastapi.testclient import TestClient
 
 from app import database, models
 from app.database import SessionLocal
 from app.main import app
+from app.observability import JsonFormatter, configure_logging
 from tests.conftest import ADMIN_PASSWORD
 from tests.helpers import create_student, csrf_headers, login
 
@@ -71,3 +76,33 @@ def test_unhandled_exception_is_json_and_keeps_request_id(monkeypatch):
         "request_id": "error-request-123",
     }
     assert response.headers["X-Request-ID"] == "error-request-123"
+
+
+def test_json_formatter_serializes_context_and_exceptions():
+    formatter = JsonFormatter()
+    record = logging.LogRecord(
+        "school_guard.test", logging.INFO, __file__, 1, "hola %s", ("mundo",), None
+    )
+    record.context = {"status": 200, "path": "/healthz"}
+
+    payload = json.loads(formatter.format(record))
+    assert payload["message"] == "hola mundo"
+    assert payload["level"] == "INFO"
+    assert payload["request_id"] is None
+    assert payload["status"] == 200
+
+    try:
+        raise RuntimeError("fallo de prueba")
+    except RuntimeError:
+        record.exc_info = sys.exc_info()
+
+    payload = json.loads(formatter.format(record))
+    assert "RuntimeError" in payload["exception"]
+
+
+def test_configure_logging_is_idempotent():
+    handlers_before = list(logging.getLogger().handlers)
+
+    configure_logging()
+
+    assert list(logging.getLogger().handlers) == handlers_before
