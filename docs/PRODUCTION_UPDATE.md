@@ -3,7 +3,7 @@
 Actualización de una instalación existente en `192.168.3.5`. **No es un despliegue inicial**: no crear usuarios del sistema, venv, base de datos ni administrador. El servicio y la base ya existen.
 
 - Código: clon Git en `/var/www/school_guard`.
-- Servicio: `school-guard` (systemd), Uvicorn en `127.0.0.1:8001`, Nginx con TLS y DNS interno.
+- Servicio: `schoolguard.service` (systemd), Uvicorn en `127.0.0.1:8001`, Nginx con TLS y DNS interno.
 - Base: MySQL 8 con Alembic. Migraciones posibles: `0002_security_and_audit` y `0003_photo_paths`.
 - Los carnets v1 ya impresos siguen válidos: no se rota `QR_SECRET_KEY_CURRENT`.
 - Fuera de alcance: rotación de secretos, edición/untracking de `.env`, purga de historial, cambios de Nginx/TLS y reimpresión masiva v2.
@@ -11,7 +11,7 @@ Actualización de una instalación existente en `192.168.3.5`. **No es un despli
 ## 0. Descubrir la instalación real (solo lectura)
 
 ```bash
-UNIT=school-guard
+UNIT=schoolguard.service
 APP_DIR=/var/www/school_guard
 BACKUP_DIR=/var/backups/school_guard
 MYSQL_CNF=/etc/school-guard/mysql-backup.cnf
