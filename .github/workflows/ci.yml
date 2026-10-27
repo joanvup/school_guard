@@ -60,8 +60,8 @@ jobs:
       - name: Tests
         # Los unitarios usan SQLite; los marcados "mysql" validan constraints y
         # concurrencia contra el servicio MySQL 8 ya migrado.
-        # El umbral sube a 70 % / 80 % en los módulos críticos al cerrar la Fase 6.
-        run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=50
+        # Umbral global del 70 %; auth.py, scan.py y lunch.py superan el 80 %.
+        run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
 
       - name: Dependency audit
         continue-on-error: true
