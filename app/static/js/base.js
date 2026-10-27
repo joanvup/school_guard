@@ -34,8 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/static/sw.js')
-            .then((registration) => console.log('SW registrado con alcance:', registration.scope))
-            .catch((error) => console.warn('SW fallo al registrar:', error));
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
     });
 }

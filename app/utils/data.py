@@ -1,4 +1,11 @@
+import io
 import math
+
+
+def read_excel(data: bytes):
+    import pandas as pd
+
+    return pd.read_excel(io.BytesIO(data), dtype=str)
 
 
 def clean_text(value) -> str:

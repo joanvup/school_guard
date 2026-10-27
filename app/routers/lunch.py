@@ -1,10 +1,8 @@
-import io
 import logging
 import math
 
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -12,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from .. import database, deps, models
 from ..schemas import LunchRequest
 from ..services.lunch import get_ticket, record_lunch, reprint_ticket, search_people, ticket_payload
+from ..utils.excel import build_xlsx
 from ..utils.media import photo_url
 from ..utils.time import day_bounds, localize
 
@@ -26,13 +25,6 @@ router = APIRouter(
 templates = Jinja2Templates(directory="app/templates")
 
 PAGE_SIZE = 50
-FORMULA_PREFIXES = ("=", "+", "-", "@")
-
-
-def _safe_cell(value):
-    if isinstance(value, str) and value.startswith(FORMULA_PREFIXES):
-        return "'" + value
-    return value
 
 
 def _person_payload(person, person_type: str) -> dict:
@@ -264,41 +256,39 @@ def export_lunch_excel(
     logs = (
         query.options(joinedload(models.LunchLog.operator))
         .order_by(models.LunchLog.timestamp)
-        .all()
+        .yield_per(500)
     )
 
-    data = []
-    for log in logs:
-        if log.student_id:
-            person_type_label = "Estudiante"
-        elif log.employee_id:
-            person_type_label = "Empleado"
-        else:
-            person_type_label = "?"
+    def rows():
+        for log in logs:
+            if log.student_id:
+                person_type_label = "Estudiante"
+            elif log.employee_id:
+                person_type_label = "Empleado"
+            else:
+                person_type_label = "?"
 
-        data.append(
-            {
-                "Fecha": log.service_date.isoformat(),
-                "Hora": localize(log.timestamp).strftime("%H:%M:%S"),
-                "Tipo Almuerzo": _safe_cell(log.delivered_type),
-                "Nombre": _safe_cell(log.person_name or ""),
-                "Tipo Persona": person_type_label,
-                "Curso/Cargo": _safe_cell(log.person_extra or ""),
-                "Operador": _safe_cell(log.operator.username if log.operator else ""),
-            }
-        )
+            yield [
+                log.service_date.isoformat(),
+                localize(log.timestamp).strftime("%H:%M:%S"),
+                log.delivered_type,
+                log.person_name or "",
+                person_type_label,
+                log.person_extra or "",
+                log.operator.username if log.operator else "",
+            ]
 
-    df = pd.DataFrame(data)
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Almuerzos")
-    output.seek(0)
-
-    headers = {
-        "Content-Disposition": f'attachment; filename="almuerzos_{start_date.isoformat()}.xlsx"'
-    }
-    return Response(
-        content=output.getvalue(),
-        headers=headers,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    return build_xlsx(
+        filename=f"almuerzos_{start_date.isoformat()}.xlsx",
+        sheet_name="Almuerzos",
+        headers=[
+            "Fecha",
+            "Hora",
+            "Tipo Almuerzo",
+            "Nombre",
+            "Tipo Persona",
+            "Curso/Cargo",
+            "Operador",
+        ],
+        rows=rows(),
     )

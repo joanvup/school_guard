@@ -47,6 +47,9 @@ class Settings(BaseSettings):
 
     csp_mode: Literal["enforce", "report-only", "off"] = Field(default="enforce", alias="CSP_MODE")
     hsts_max_age: int = Field(default=31536000, alias="HSTS_MAX_AGE", ge=0)
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO", alias="LOG_LEVEL"
+    )
 
     bootstrap_admin_password: str | None = Field(default=None, alias="BOOTSTRAP_ADMIN_PASSWORD")
     media_photos_dir: Path = Field(

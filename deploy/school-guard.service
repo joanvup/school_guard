@@ -1,0 +1,27 @@
+[Unit]
+Description=School Guard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=schoolguard
+Group=schoolguard
+WorkingDirectory=/opt/school-guard
+EnvironmentFile=/opt/school-guard/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/school-guard/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 4 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/school-guard/app/data
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

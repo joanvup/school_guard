@@ -94,6 +94,12 @@
                 <tbody id="modalContent"></tbody>
             </table>
             <p id="modalEmpty" class="text-center text-gray-500 py-4 hidden">Sin registros.</p>
+            <div id="modalMoreWrapper" class="text-center pt-4 hidden">
+                <button id="modalMore" type="button"
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50">
+                    Cargar más
+                </button>
+            </div>
         </div>
         <div class="bg-gray-50 px-6 py-3 border-t text-right">
             <button onclick="closeModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded">Cerrar</button>
@@ -173,6 +179,9 @@
     const modalTable = document.getElementById('modalTable');
     const modalLoader = document.getElementById('modalLoader');
     const modalEmpty = document.getElementById('modalEmpty');
+    const modalMoreWrapper = document.getElementById('modalMoreWrapper');
+    const modalMoreButton = document.getElementById('modalMore');
+    let detailState = null;
 
     function buildDetailRow(item) {
         const row = document.createElement('tr');
@@ -224,40 +233,76 @@
         return row;
     }
 
-    async function openDetailsModal(type) {
-        const date = document.getElementById('datePicker').value;
-        modal.classList.remove('hidden');
-        document.getElementById('modalTitle').innerText = `Detalle: ${type}`;
-        modalContent.replaceChildren();
+    async function loadDetailPage() {
+        if (!detailState) return;
+
+        const { type, date, page, pageSize } = detailState;
+        const url = `/api/dashboard/lunch/details?type=${encodeURIComponent(type)}&date=${encodeURIComponent(date)}&page=${page}&page_size=${pageSize}`;
+
         modalLoader.classList.remove('hidden');
-        modalTable.classList.add('hidden');
-        modalEmpty.classList.add('hidden');
+        modalMoreButton.disabled = true;
+        modalMoreButton.innerText = 'Cargando...';
 
         try {
-            const { response, data } = await apiFetch(
-                `/api/dashboard/lunch/details?type=${encodeURIComponent(type)}&date=${encodeURIComponent(date)}`
-            );
-            modalLoader.classList.add('hidden');
+            const { response, data } = await apiFetch(url);
             if (!response.ok) {
                 modalEmpty.innerText = apiErrorMessage(data, 'No fue posible cargar el detalle.');
                 modalEmpty.classList.remove('hidden');
+                modalMoreWrapper.classList.add('hidden');
                 return;
             }
-            if (!Array.isArray(data) || data.length === 0) {
+
+            const total = Number(response.headers.get('X-Total-Count') || 0);
+            data.forEach((item) => modalContent.appendChild(buildDetailRow(item)));
+            detailState.loaded += data.length;
+            detailState.total = total;
+            detailState.page += 1;
+
+            if (detailState.loaded === 0) {
                 modalEmpty.innerText = 'Sin registros.';
                 modalEmpty.classList.remove('hidden');
-                return;
+                modalTable.classList.add('hidden');
+                modalMoreWrapper.classList.add('hidden');
+            } else {
+                modalEmpty.classList.add('hidden');
+                modalTable.classList.remove('hidden');
+                modalMoreWrapper.classList.toggle('hidden', detailState.loaded >= total);
             }
-            modalTable.classList.remove('hidden');
-            data.forEach((item) => modalContent.appendChild(buildDetailRow(item)));
         } catch (error) {
-            modalLoader.classList.add('hidden');
             modalEmpty.innerText = 'No fue posible cargar el detalle.';
             modalEmpty.classList.remove('hidden');
+            modalMoreWrapper.classList.add('hidden');
+        } finally {
+            modalLoader.classList.add('hidden');
+            modalMoreButton.disabled = false;
+            modalMoreButton.innerText = 'Cargar más';
         }
     }
 
+    async function openDetailsModal(type) {
+        const date = document.getElementById('datePicker').value;
+
+        detailState = {
+            type,
+            date,
+            page: 1,
+            pageSize: 50,
+            loaded: 0,
+            total: 0
+        };
+        modal.classList.remove('hidden');
+        document.getElementById('modalTitle').innerText = `Detalle: ${type}`;
+        modalContent.replaceChildren();
+        modalTable.classList.add('hidden');
+        modalEmpty.classList.add('hidden');
+        modalMoreWrapper.classList.add('hidden');
+        await loadDetailPage();
+    }
+
+    modalMoreButton.addEventListener('click', loadDetailPage);
+
     function closeModal() {
+        detailState = null;
         modal.classList.add('hidden');
     }
 

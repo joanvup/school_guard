@@ -5,20 +5,29 @@ from fastapi.staticfiles import StaticFiles
 from . import deps
 from .config import settings
 from .csrf import csrf_cookie_middleware, verify_csrf
+from .observability import (
+    configure_logging,
+    install_exception_handlers,
+    request_id_middleware,
+)
 from .routers import (
     auth,
     cards,
     dashboard,
     doors,
     employees,
+    health,
     lunch,
     media,
+    pwa,
     reports,
     scan,
     students,
     users,
 )
 from .security import security_headers_middleware
+
+configure_logging()
 
 docs_enabled = not settings.is_production
 app = FastAPI(
@@ -56,7 +65,12 @@ async def add_user_to_request(request: Request, call_next):
 
 app.middleware("http")(csrf_cookie_middleware)
 app.middleware("http")(security_headers_middleware)
+# Debe registrarse al final para quedar como el middleware más externo.
+app.middleware("http")(request_id_middleware)
+install_exception_handlers(app)
 
+app.include_router(health.router)
+app.include_router(pwa.router)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(students.router)

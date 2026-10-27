@@ -4,13 +4,11 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from urllib.parse import quote_plus
-import pandas as pd
-import io
 import math
 from typing import Optional
 from .. import database, models, deps
 from ..services.audit import add_audit
-from ..utils.data import clean_text, normalize_excel_id, normalize_rfid
+from ..utils.data import clean_text, normalize_excel_id, normalize_rfid, read_excel
 from ..utils.media import UploadError, normalize_photo, read_upload, store_photo
 
 router = APIRouter(
@@ -180,7 +178,7 @@ def import_basic(
     if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
         return _error("Formato inválido")
     try:
-        df = pd.read_excel(io.BytesIO(read_upload(file)), dtype=str)
+        df = read_excel(read_upload(file))
         count = 0
         skipped = 0
         for _, row in df.iterrows():
@@ -227,7 +225,7 @@ def update_lunch_groups(
     if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
         return _error("Formato inválido")
     try:
-        df = pd.read_excel(io.BytesIO(read_upload(file)), dtype=str)
+        df = read_excel(read_upload(file))
         updated = 0
         skipped = 0
 
@@ -277,7 +275,7 @@ def update_rfid(
     if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
         return _error("Formato inválido")
     try:
-        df = pd.read_excel(io.BytesIO(read_upload(file)), dtype=str)
+        df = read_excel(read_upload(file))
         updated = 0
         skipped = 0
         seen_rfid: set[str] = set()

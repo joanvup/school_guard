@@ -1,196 +1,158 @@
-<div align="center">
-  <img src="app/static/assets/logo.png" alt="School Guard Logo" width="160">
-  <h1>School Guard 🛡️</h1>
-  <p>
-    <strong>Sistema Integral de Control de Salidas Peatonales Escolares</strong>
-  </p>
-  <p>
-    <a href="https://fastapi.tiangolo.com/">
-        <img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI">
-    </a>
-    <a href="https://www.python.org/">
-        <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
-    </a>
-    <a href="https://tailwindcss.com/">
-        <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind">
-    </a>
-    <a href="https://www.mysql.com/">
-        <img src="https://img.shields.io/badge/MySQL-000000?style=for-the-badge&logo=mysql&logoColor=white" alt="MySQL">
-    </a>
-  </p>
-</div>
+# School Guard
 
----
+Aplicación web para controlar salidas peatonales y entregas de almuerzo en una institución educativa. Registra cada intento con firma QR, operador, puerta y trazabilidad, y expone tableros y reportes para portería, comedor y administración.
 
-## 📖 Descripción
+## Stack
 
-**School Guard** es una Aplicación Web Progresiva (PWA) diseñada para gestionar, controlar y auditar la salida de estudiantes en instituciones educativas. 
+- Python 3.11, FastAPI, SQLAlchemy 2 con sesiones síncronas, Alembic.
+- MySQL 8 en producción; SQLite en pruebas unitarias.
+- Jinja2 y JavaScript sin framework; CSS compilado localmente.
+- PWA instalable con service worker que solo cachea estáticos.
+- Sesiones JWT en cookie `HttpOnly`, CSRF de doble envío, roles y auditoría.
 
-El sistema reemplaza los listados en papel por un escáner QR digital seguro, capaz de validar en tiempo real si un estudiante está autorizado para retirarse, registrando la hora exacta, la puerta de salida y el operador responsable. Cuenta con medidas de seguridad criptográfica para evitar la falsificación de carnets.
+## Módulos
 
-## ✨ Características Principales
+- **Salidas:** escaneo de carnet QR, validación de autorización, cooldown, historial con snapshots y reportes por fecha/puerta.
+- **Almuerzos:** identificación por QR, RFID o búsqueda manual, un registro por persona y día, ticket térmico reimprimible y reportes.
+- **Administración:** estudiantes, empleados, puertas, usuarios, carnets PDF, importaciones Excel/ZIP y fotos privadas.
 
-### 📱 Operación y Seguridad
-*   **Escáner QR Web/Móvil:** Uso de la cámara del dispositivo para lectura rápida.
-*   **Validación Criptográfica (HMAC):** Los códigos QR están firmados digitalmente para evitar falsificaciones o generación de códigos por terceros.
-*   **Anti-Passback (Cooldown):** Bloqueo temporal para evitar que un mismo carnet sea escaneado dos veces consecutivas en un periodo corto.
-*   **PWA Instalable:** Funciona como app nativa en Android/iOS (Icono en escritorio, pantalla completa).
+## Requisitos
 
-### 🏫 Gestión Administrativa
-*   **Dashboard en Tiempo Real:** Gráficas de salidas por curso, hora pico y estadísticas por puerta.
-*   **Gestión de Estudiantes:** CRUD completo con fotos.
-*   **Carga Masiva:** Importación de estudiantes desde Excel y fotos desde archivos ZIP.
-*   **Generador de Carnets:** Motor PDF integrado para generar carnets listos para imprimir (5.4x8.5cm) y descarga de QRs.
+- Python 3.11 o superior.
+- MySQL 8 (producción o pruebas de integración).
+- HTTPS en producción: la cámara del navegador y la cookie `Secure` lo requieren.
 
-### 👥 Roles y Accesos
-*   **Administrador:** Acceso total al sistema, gestión de usuarios y configuraciones.
-*   **Operador (Vigilante):** Acceso restringido únicamente al escáner y dashboard básico.
+## Instalación local
 
----
-
-## 🛠️ Estructura del Proyecto
-
-El proyecto sigue una arquitectura modular basada en FastAPI:
-
-```text
-school_guard/
-├── app/
-│   ├── routers/       # Endpoints de la API (Auth, Dashboard, Scan, etc.)
-│   ├── static/        # Assets (CSS compilado, JS local, Fotos, Iconos)
-│   ├── templates/     # Vistas HTML (Jinja2)
-│   ├── auth.py        # Lógica de JWT y Firmas HMAC
-│   ├── database.py    # Conexión MySQL (SQLAlchemy)
-│   ├── models.py      # Modelos de Base de Datos
-│   └── main.py        # Punto de entrada
-├── .env               # Variables de entorno (NO SUBIR AL REPO)
-├── requirements.txt   # Dependencias Python
-└── README.md          # Documentación
-
-```
-
-## 🚀 Instalación y Despliegue
-
-### Prerrequisitos
-*   Python 3.10 o superior.
-*   MySQL Server.
-*   Entorno Linux (Recomendado para producción) o Windows.
-
-### 1. Clonar el repositorio
 ```bash
 git clone https://github.com/joanvup/school_guard.git
 cd school_guard
-```
-### 2. Configurar Entorno Virtual
-```bash
-python -m venv venv
+python -m venv .venv
 ```
 
-# Windows
+Windows:
+
 ```bash
-.\venv\Scripts\activate
-```
-# Linux/Mac
-```bash
-source venv/bin/activate
+.venv\Scripts\activate
 ```
 
-### 3. Instalar Dependencias
+Linux/macOS:
+
 ```bash
-pip install -r requirements.txt
+source .venv/bin/activate
 ```
 
-### 4. Configuración (.env)
-Crea un archivo .env en la raíz del proyecto con las siguientes variables:
+Instalar dependencias:
 
-```ini
-# Base de Datos
-DATABASE_URL=mysql+pymysql://usuario:password@localhost:3306/nombre_db
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
 
-# Seguridad (JWT) - Generar clave segura
-SECRET_KEY=tu_clave_super_secreta_para_jwt
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=120
+Crear `.env` a partir de la plantilla y completar los valores:
 
-# Seguridad (Firma QR) - CRÍTICO: Si cambia, los carnets impresos dejan de funcionar
-QR_SECRET_KEY=clave_secreta_para_firmar_qrs_no_cambiar
-```
-### 5. Preparación de Assets
-El proyecto está configurado para no depender de CDNs externos en producción.
-## Descargar librerías JS (Chart.js, HTML5-QR)
 ```bash
-python download_libs.py
+cp .env.template .env
 ```
-## Generar iconos de la App (PWA) basados en el logo
+
+Variables obligatorias:
+
+- `DATABASE_URL`: cadena de conexión MySQL.
+- `SECRET_KEY`: clave de firma JWT, larga y aleatoria.
+- `QR_SECRET_KEY_CURRENT`: clave HMAC de los carnets.
+- `BOOTSTRAP_ADMIN_PASSWORD`: solo para crear el administrador inicial (mínimo 12 caracteres).
+
+Aplicar migraciones y crear el administrador:
+
 ```bash
-python generate_icons.py
-```
-### 6. Inicializar Base de Datos
-Este script crea las tablas y el usuario administrador por defecto.
-```bash
+alembic upgrade head
 python init_db.py
 ```
 
-Credenciales por defecto:
-User: admin
-Pass: admin123
+El bootstrap no usa contraseñas por defecto: si `BOOTSTRAP_ADMIN_PASSWORD` no está definida o es débil, falla.
 
-### 7. Ejecutar (Modo Desarrollo)
+Los iconos PWA ya están versionados. Solo es necesario regenerarlos si cambia el logo:
+
+```bash
+python scripts/generate_icons.py
+```
+
+Ejecutar en desarrollo:
+
 ```bash
 uvicorn app.main:app --reload
 ```
 
-## 🌐 Despliegue en Producción (Ubuntu + Nginx)
+La documentación interactiva de FastAPI queda en `/docs` fuera de producción.
 
-Para un entorno productivo robusto se recomienda usar **Gunicorn** detrás de un proxy inverso **Nginx**.
+## Roles
 
-### 1. Configurar Servicio (Systemd)
-Crear un servicio para mantener la app corriendo en el puerto 8001.
+| Rol | Acceso |
+|---|---|
+| `ADMIN` | Administración completa, reportes de salidas y comedor. |
+| `OPERATOR` | Portería, escaneo de salidas y sus reportes. |
+| `LUNCH_OP` | Comedor, escaneo de almuerzos, tickets y sus reportes. |
 
-### 2. Configuración de Nginx
-Bloque de servidor recomendado para manejar estáticos y proxy reverso:
+Un usuario inactivo no puede iniciar sesión ni conservar una sesión válida. Cambiar contraseña o rol incrementa `token_version` e invalida tokens previos.
 
-```nginx
-server {
-    listen 80;
-    server_name salidas.tucuelegio.edu.co;
+## Pruebas y calidad
 
-    # Aumentar límite para subida de fotos/zip
-    client_max_body_size 50M;
-
-    location / {
-        proxy_pass http://127.0.0.1:8001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # Servir archivos estáticos directamente (Optimización)
-    location /static/ {
-        alias /var/www/school-guard/app/static/;
-        expires 30d;
-    }
-}
+```bash
+.venv/Scripts/python.exe -m pytest -q
+.venv/Scripts/python.exe -m ruff check .
+.venv/Scripts/python.exe -m ruff format --check .
 ```
-### 3. Certificado SSL (HTTPS)
-⚠️ Importante: Es obligatorio configurar HTTPS (usando Certbot/Let's Encrypt) para que los navegadores móviles permitan el acceso a la cámara para escanear los códigos QR.
 
----
+Los tests unitarios usan SQLite. Los marcados como `mysql` validan constraints y concurrencia contra MySQL 8 y se ejecutan en CI con `MYSQL_TEST_URL`; en local se omiten si no hay una base disponible.
 
-### Parte 3: Seguridad y Licencia
+Migraciones:
 
-## 🔒 Seguridad del Código QR
+```bash
+alembic upgrade head
+alembic check
+```
 
-Para prevenir vulnerabilidades donde un estudiante genera un código QR falso usando solo su número de identificación, el sistema implementa **HMAC-SHA256**.
+## Estructura
 
-1.  **Generación:** Al crear el carnet, se genera un string compuesto: `ID_ESTUDIANTE` + `.` + `FIRMA`.
-2.  **Firma:** La firma se calcula criptográficamente usando la variable `QR_SECRET_KEY` (solo conocida por el servidor).
-3.  **Verificación:** Al escanear, el servidor recalcula la firma del ID recibido. Si no coincide con la firma del QR, el acceso es denegado inmediatamente como **"Falsificado"**.
+```text
+school_guard/
+├── alembic/                 # Migraciones
+├── app/
+│   ├── routers/             # Endpoints HTTP
+│   ├── services/            # Lógica de salidas, almuerzos y auditoría
+│   ├── utils/               # Fechas, medios, Excel y saneamiento de datos
+│   ├── templates/           # Vistas Jinja2
+│   ├── static/              # CSS, JS, iconos y assets locales
+│   ├── data/photos/         # Fotos privadas de estudiantes y empleados
+│   ├── config.py            # Configuración validada al arranque
+│   ├── observability.py     # request_id, logs JSON y errores controlados
+│   └── main.py              # Punto de entrada
+├── deploy/                  # Ejemplos de Nginx y systemd
+├── docs/                    # Despliegue y operación
+├── scripts/                 # Iconos, backup y restore
+├── tests/
+└── requirements.txt
+```
 
-Esto garantiza que solo los códigos QR generados legítimamente por la plataforma sean válidos.
+## Seguridad y privacidad
 
----
+- Los QR se validan con HMAC-SHA256. Se aceptan carnets v1 durante la transición y v2 para nuevas impresiones.
+- Las fotos no se sirven desde `/static`; se entregan autenticadas en `/media/photos/...` con `Cache-Control: private, no-store`.
+- Las mutaciones requieren CSRF y método POST.
+- Los formularios y tableros usan `textContent`/DOM para evitar XSS.
+- Cada rechazo, duplicado y reintento deja rastro en `audit_logs` o `scan_attempts`.
+- Las exportaciones Excel neutralizan fórmulas y usan memoria acotada.
+- El escaneo es **online**: el service worker solo cachea estáticos y no promete operación offline.
 
-## 📄 Licencia
+## Despliegue y operación
 
-Propiedad de **Fundación Colegio Bilingüe**.
-Desarrollado para uso interno institucional. Prohibida su distribución o comercialización sin autorización expresa.
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Nginx, systemd, migraciones, TLS y rotación de secretos.
+- [docs/OPERATIONS.md](docs/OPERATIONS.md): salud, logs por `request_id`, backup/restore, tickets e incidentes.
+
+## Pendientes de coordinación
+
+- El repositorio aún versiona `.env`: retirarlo del índice, purgar el historial y rotar secretos reales requiere force-push coordinado y ventana de mantenimiento.
+- Las migraciones y cambios de infraestructura en producción se ejecutan con backup previo y ventana acordada.
+
+## Licencia
+
+Propiedad de **Fundación Colegio Bilingüe**. Uso interno institucional; prohibida su distribución o comercialización sin autorización expresa.

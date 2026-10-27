@@ -21,8 +21,6 @@ htmlcov/
 app/static/photos/*
 !app/static/photos/.gitkeep
 app/data/photos/
-app/static/icons/*
-!app/static/icons/.gitkeep
 _migration_test.db
 
 # VS Code

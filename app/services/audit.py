@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import Request
 
 from .. import models
+from ..observability import current_request_id
 
 
 def hash_code(code: str | None) -> str | None:
@@ -34,6 +35,9 @@ def add_audit(
     request: Request | None = None,
 ) -> models.AuditLog:
     ip, user_agent = _request_metadata(request)
+    request_id = current_request_id()
+    if request_id is None and request is not None:
+        request_id = getattr(request.state, "request_id", None)
     entry = models.AuditLog(
         actor_id=actor_id,
         action=action,
@@ -42,6 +46,7 @@ def add_audit(
         ip=ip,
         user_agent=user_agent,
         details=details,
+        request_id=request_id,
     )
     db.add(entry)
     return entry

@@ -1,17 +1,16 @@
-from fastapi import APIRouter, Depends, Form, UploadFile, File, Response, Query
+from fastapi import APIRouter, Depends, Form, UploadFile, File, Query
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from typing import Optional
 from urllib.parse import quote_plus
-import pandas as pd
-import io
 import math
 from sqlalchemy import or_
 from starlette.requests import Request
 from .. import database, models, deps
 from ..services.audit import add_audit
-from ..utils.data import clean_text, normalize_excel_id, normalize_rfid
+from ..utils.data import clean_text, normalize_excel_id, normalize_rfid, read_excel
+from ..utils.excel import build_xlsx
 from ..utils.media import (
     UploadError,
     normalize_photo,
@@ -211,16 +210,11 @@ def toggle_auth(id: int, request: Request, db: Session = Depends(database.get_db
 
 @router.get("/template")
 def download_template():
-    df = pd.DataFrame(columns=["ID", "Nombre Completo", "Curso", "Autorizado (SI/NO)"])
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Plantilla")
-    output.seek(0)
-    headers = {"Content-Disposition": 'attachment; filename="plantilla_estudiantes.xlsx"'}
-    return Response(
-        content=output.getvalue(),
-        headers=headers,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    return build_xlsx(
+        filename="plantilla_estudiantes.xlsx",
+        sheet_name="Plantilla",
+        headers=["ID", "Nombre Completo", "Curso", "Autorizado (SI/NO)"],
+        rows=[],
     )
 
 
@@ -237,7 +231,7 @@ def import_students(
         return _error(str(exc))
 
     try:
-        df = pd.read_excel(io.BytesIO(contents), dtype=str)
+        df = read_excel(contents)
         count = 0
         skipped = 0
         for _, row in df.iterrows():
@@ -352,7 +346,7 @@ def update_lunch_groups_students(
         return _error("Formato inválido")
     try:
         content = read_upload(file)
-        df = pd.read_excel(io.BytesIO(content), dtype=str)
+        df = read_excel(content)
         updated = 0
         skipped = 0
 
@@ -402,7 +396,7 @@ def update_rfid_students(
     if not (file.filename or "").lower().endswith((".xls", ".xlsx")):
         return _error("Formato inválido")
     try:
-        df = pd.read_excel(io.BytesIO(read_upload(file)), dtype=str)
+        df = read_excel(read_upload(file))
         updated = 0
         skipped = 0
         seen_rfid: set[str] = set()

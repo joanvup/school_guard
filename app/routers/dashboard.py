@@ -1,8 +1,6 @@
-from collections import defaultdict
-
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session, joinedload
 
 from .. import database, deps, models
@@ -16,6 +14,12 @@ templates = Jinja2Templates(directory="app/templates")
 def _exit_range(target_date):
     start_dt, end_dt = day_range(target_date)
     return models.ExitLog.timestamp >= start_dt, models.ExitLog.timestamp <= end_dt
+
+
+def _set_pagination_headers(response: Response, *, page: int, page_size: int, total: int) -> None:
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Page"] = str(page)
+    response.headers["X-Page-Size"] = str(page_size)
 
 
 # --- VISTA HTML PRINCIPAL (Routing por Rol) ---
@@ -88,12 +92,16 @@ def get_exit_charts(date: str = Query(None), db: Session = Depends(database.get_
         .all()
     )
 
-    timeline = defaultdict(int)
-    timestamps = db.query(models.ExitLog.timestamp).filter(start_filter, end_filter).all()
-    for (timestamp,) in timestamps:
-        timeline[timestamp.hour] += 1
+    hour_column = func.extract("hour", models.ExitLog.timestamp)
+    timeline_rows = (
+        db.query(hour_column, func.count(models.ExitLog.id))
+        .filter(start_filter, end_filter)
+        .group_by(hour_column)
+        .order_by(hour_column)
+        .all()
+    )
+    hours = [int(hour) for hour, _ in timeline_rows]
 
-    hours = sorted(timeline)
     return {
         "courses": {
             "labels": [str(course or "Sin curso") for course, _ in courses_data] or ["Sin datos"],
@@ -101,7 +109,7 @@ def get_exit_charts(date: str = Query(None), db: Session = Depends(database.get_
         },
         "timeline": {
             "labels": [f"{hour}:00" for hour in hours] or ["Sin datos"],
-            "data": [timeline[hour] for hour in hours] or [0],
+            "data": [count for _, count in timeline_rows] or [0],
         },
     }
 
@@ -111,23 +119,30 @@ def get_exit_charts(date: str = Query(None), db: Session = Depends(database.get_
     dependencies=[Depends(deps.require_exit_access)],
 )
 def get_exit_details(
+    response: Response,
     type: str = Query(...),
     id: int = Query(None),
     date: str = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(database.get_db),
 ):
     target_date = parse_date(date)
     start_filter, end_filter = _exit_range(target_date)
 
-    query = (
-        db.query(models.ExitLog)
-        .filter(start_filter, end_filter)
-        .options(joinedload(models.ExitLog.student))
-    )
+    query = db.query(models.ExitLog).filter(start_filter, end_filter)
     if type == "door" and id:
         query = query.filter(models.ExitLog.door_id == id)
 
-    logs = query.order_by(models.ExitLog.timestamp.desc()).all()
+    total = query.count()
+    logs = (
+        query.options(joinedload(models.ExitLog.student))
+        .order_by(models.ExitLog.timestamp.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    _set_pagination_headers(response, page=page, page_size=page_size, total=total)
     return [
         {
             "photo": photo_url(log.student.photo_path, "students") if log.student else None,
@@ -152,36 +167,31 @@ def get_exit_details(
 def get_lunch_stats(date: str = Query(None), db: Session = Depends(database.get_db)):
     target_date = parse_date(date)
 
-    rows = (
-        db.query(models.LunchLog.delivered_type, func.count(models.LunchLog.id))
+    row = (
+        db.query(
+            func.count(models.LunchLog.id).label("total"),
+            func.coalesce(
+                func.sum(case((models.LunchLog.delivered_type == "Normal", 1), else_=0)), 0
+            ).label("normal"),
+            func.coalesce(
+                func.sum(case((models.LunchLog.delivered_type == "Especial", 1), else_=0)), 0
+            ).label("special"),
+            func.coalesce(
+                func.sum(case((models.LunchLog.student_id.is_not(None), 1), else_=0)), 0
+            ).label("students"),
+            func.coalesce(
+                func.sum(case((models.LunchLog.employee_id.is_not(None), 1), else_=0)), 0
+            ).label("employees"),
+        )
         .filter(models.LunchLog.service_date == target_date)
-        .group_by(models.LunchLog.delivered_type)
-        .all()
-    )
-    type_counts = dict(rows)
-
-    students_count = (
-        db.query(models.LunchLog)
-        .filter(
-            models.LunchLog.service_date == target_date,
-            models.LunchLog.student_id.is_not(None),
-        )
-        .count()
-    )
-    employees_count = (
-        db.query(models.LunchLog)
-        .filter(
-            models.LunchLog.service_date == target_date,
-            models.LunchLog.employee_id.is_not(None),
-        )
-        .count()
+        .one()
     )
 
     return {
-        "total": sum(type_counts.values()),
-        "normal": type_counts.get("Normal", 0),
-        "special": type_counts.get("Especial", 0),
-        "by_person": {"students": students_count, "employees": employees_count},
+        "total": int(row.total),
+        "normal": int(row.normal),
+        "special": int(row.special),
+        "by_person": {"students": int(row.students), "employees": int(row.employees)},
     }
 
 
@@ -192,16 +202,16 @@ def get_lunch_stats(date: str = Query(None), db: Session = Depends(database.get_
 def get_lunch_charts(date: str = Query(None), db: Session = Depends(database.get_db)):
     target_date = parse_date(date)
 
-    rows = (
-        db.query(models.LunchLog.timestamp)
+    hour_column = func.extract("hour", models.LunchLog.timestamp)
+    timeline_rows = (
+        db.query(hour_column, func.count(models.LunchLog.id))
         .filter(models.LunchLog.service_date == target_date)
+        .group_by(hour_column)
+        .order_by(hour_column)
         .all()
     )
-    timeline = defaultdict(int)
-    for (timestamp,) in rows:
-        timeline[timestamp.hour] += 1
+    hours = [int(hour) for hour, _ in timeline_rows]
 
-    hours = sorted(timeline)
     distribution = (
         db.query(models.LunchLog.delivered_type, func.count(models.LunchLog.id))
         .filter(models.LunchLog.service_date == target_date)
@@ -213,7 +223,7 @@ def get_lunch_charts(date: str = Query(None), db: Session = Depends(database.get
     return {
         "timeline": {
             "labels": [f"{hour}:00" for hour in hours] or ["Sin datos"],
-            "data": [timeline[hour] for hour in hours] or [0],
+            "data": [count for _, count in timeline_rows] or [0],
         },
         "distribution": {
             "labels": ["Normal", "Especial"],
@@ -227,24 +237,33 @@ def get_lunch_charts(date: str = Query(None), db: Session = Depends(database.get
     dependencies=[Depends(deps.require_lunch_access)],
 )
 def get_lunch_details(
-    type: str = Query(...), date: str = Query(None), db: Session = Depends(database.get_db)
+    response: Response,
+    type: str = Query(...),
+    date: str = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(database.get_db),
 ):
     target_date = parse_date(date)
 
-    query = (
-        db.query(models.LunchLog)
-        .filter(models.LunchLog.service_date == target_date)
-        .options(
-            joinedload(models.LunchLog.student),
-            joinedload(models.LunchLog.employee),
-        )
-    )
+    query = db.query(models.LunchLog).filter(models.LunchLog.service_date == target_date)
     if type == "Normal":
         query = query.filter(models.LunchLog.delivered_type == "Normal")
     elif type == "Especial":
         query = query.filter(models.LunchLog.delivered_type == "Especial")
 
-    logs = query.order_by(models.LunchLog.timestamp.desc()).all()
+    total = query.count()
+    logs = (
+        query.options(
+            joinedload(models.LunchLog.student),
+            joinedload(models.LunchLog.employee),
+        )
+        .order_by(models.LunchLog.timestamp.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    _set_pagination_headers(response, page=page, page_size=page_size, total=total)
 
     data = []
     for log in logs:

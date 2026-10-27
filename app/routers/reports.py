@@ -1,14 +1,12 @@
-import io
 import math
 
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc
 from sqlalchemy.orm import Session, joinedload
 
 from .. import database, deps, models
+from ..utils.excel import build_xlsx
 from ..utils.time import day_bounds
 
 router = APIRouter(
@@ -18,7 +16,6 @@ router = APIRouter(
 templates = Jinja2Templates(directory="app/templates")
 
 PAGE_SIZE = 50
-FORMULA_PREFIXES = ("=", "+", "-", "@")
 
 
 def _selected_door_id(door_id: str | None) -> int | None:
@@ -30,12 +27,6 @@ def _selected_door_id(door_id: str | None) -> int | None:
             detail="Puerta inválida",
         )
     return int(door_id.strip())
-
-
-def _safe_cell(value):
-    if isinstance(value, str) and value.startswith(FORMULA_PREFIXES):
-        return "'" + value
-    return value
 
 
 def _sorted_logs_query(db: Session, start_dt, end_dt, door_id: int | None):
@@ -113,35 +104,30 @@ def export_reports(
         _sorted_logs_query(db, start_dt, end_dt, selected_door_id)
         .options(joinedload(models.ExitLog.student), joinedload(models.ExitLog.operator))
         .order_by(models.ExitLog.timestamp)
-        .all()
+        .yield_per(500)
     )
 
-    data = []
-    for log in logs:
-        student_id = log.student.student_id if log.student else ""
-        data.append(
-            {
-                "Fecha y Hora": log.timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
-                "ID Estudiante": _safe_cell(student_id),
-                "Nombre Estudiante": _safe_cell(log.student_name or ""),
-                "Curso": _safe_cell(log.course or ""),
-                "Puerta": _safe_cell(log.door_name or ""),
-                "Operador": _safe_cell(log.operator.username if log.operator else ""),
-            }
-        )
+    def rows():
+        for log in logs:
+            yield [
+                log.timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
+                log.student.student_id if log.student else "",
+                log.student_name or "",
+                log.course or "",
+                log.door_name or "",
+                log.operator.username if log.operator else "",
+            ]
 
-    df = pd.DataFrame(data)
-
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Reporte Salidas")
-    output.seek(0)
-
-    headers = {
-        "Content-Disposition": f'attachment; filename="reporte_{date_start}_{date_end}.xlsx"'
-    }
-    return Response(
-        content=output.getvalue(),
-        headers=headers,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    return build_xlsx(
+        filename=f"reporte_{date_start}_{date_end}.xlsx",
+        sheet_name="Reporte Salidas",
+        headers=[
+            "Fecha y Hora",
+            "ID Estudiante",
+            "Nombre Estudiante",
+            "Curso",
+            "Puerta",
+            "Operador",
+        ],
+        rows=rows(),
     )

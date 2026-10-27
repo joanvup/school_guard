@@ -1,27 +1,63 @@
-const CACHE_NAME = 'school-guard-v6';
-const urlsToCache = [
+const CACHE_NAME = 'school-guard-v7';
+const PRECACHE_URLS = [
     '/static/manifest.json',
     '/static/icons/icon-192x192.png',
-    '/static/icons/icon-512x512.png'
-    // No cacheamos HTML dinámico para asegurar datos frescos
+    '/static/icons/icon-512x512.png',
+    '/static/icons/icon-maskable-512x512.png',
+    '/static/icons/apple-touch-icon-180x180.png',
+    '/static/css/main.css',
+    '/static/css/fontawesome.css',
+    '/static/js/base.js',
+    '/static/js/api.js',
+    '/static/js/chart.min.js',
+    '/static/js/qrcode.min.js',
+    '/static/js/html5-qrcode.min.js',
+    '/static/assets/avatar.png',
+    '/static/webfonts/fa-brands-400.woff2',
+    '/static/webfonts/fa-regular-400.woff2',
+    '/static/webfonts/fa-solid-900.woff2',
+    '/static/webfonts/fa-v4compatibility.woff2'
 ];
+const PRECACHE_PATHS = new Set(PRECACHE_URLS.map((url) => new URL(url, self.location.origin).pathname));
 
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(cache => {
-                console.log('Opened cache');
-                return cache.addAll(urlsToCache);
-            })
+            .then(cache => cache.addAll(PRECACHE_URLS))
+            .then(() => self.skipWaiting())
+    );
+});
+
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys()
+            .then(keys => Promise.all(
+                keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+            ))
+            .then(() => self.clients.claim())
     );
 });
 
 self.addEventListener('fetch', event => {
-    // Estrategia: Network First (Intentar red, si falla, buscar en caché si existe)
-    // Para una app de seguridad en tiempo real, priorizamos siempre la red.
+    const request = event.request;
+    if (request.method !== 'GET') return;
+
+    const url = new URL(request.url);
+    if (url.origin !== self.location.origin) return;
+
+    // Solo estáticos precacheados: HTML, APIs y medios privados siempre van a la red.
+    if (!PRECACHE_PATHS.has(url.pathname)) return;
+
     event.respondWith(
-        fetch(event.request).catch(() => {
-            return caches.match(event.request);
+        caches.match(request).then(cached => {
+            if (cached) return cached;
+            return fetch(request).then(response => {
+                if (response.ok) {
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+                }
+                return response;
+            });
         })
     );
 });
