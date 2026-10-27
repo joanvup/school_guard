@@ -63,6 +63,8 @@ Antes de cada despliegue:
 4. `.venv/bin/alembic check` (no debe detectar deriva).
 5. Iniciar el servicio y ejecutar el smoke test.
 
+El checklist completo previo a una ventana de mantenimiento está en [OPERATIONS.md](OPERATIONS.md#checklist-pre-ventana).
+
 Si una migración falla, no continuar: restaurar el backup con `scripts/restore_db.sh` y volver al código anterior. Un `alembic downgrade` solo es aceptable si fue probado en staging.
 
 ## Servicio systemd

@@ -126,3 +126,132 @@ No se crea un segundo registro de almuerzo. Un escaneo duplicado devuelve la ent
 ## Ventana de mantenimiento
 
 Las migraciones, la rotación de secretos, los cambios de TLS y el restore real requieren ventana coordinada. Antes de tocar producción: backup verificado, responsable identificado, smoke test preparado y plan de reversión.
+
+### Checklist pre-ventana
+
+Ejecutar al menos 48 horas antes y repetir las verificaciones de solo lectura el mismo día. Marcar cada punto con fecha, responsable y evidencia.
+
+#### 1. Alcance y responsables
+
+- [ ] Fecha, hora y duración objetivo confirmadas con el colegio; modo mantenimiento en Nginx acordado.
+- [ ] Responsable de la ventana y de la decisión de rollback identificados.
+- [ ] Commit o tag a desplegar fijado y CI verde para ese SHA:
+  ```bash
+  git fetch origin
+  git log -1 --oneline origin/main
+  # Confirmar el run de GitHub Actions correspondiente al SHA
+  ```
+- [ ] Cambios congelados en `main` desde el inicio de la ventana hasta el smoke final.
+- [ ] Personal operativo avisado y respaldo manual definido (listas impresas o registro en papel).
+
+#### 2. Estado actual (solo lectura)
+
+- [ ] `/healthz` responde `200` antes de cualquier cambio.
+- [ ] Revisión actual de Alembic registrada:
+  ```bash
+  .venv/bin/alembic current
+  .venv/bin/alembic heads   # debe haber una sola cabeza
+  ```
+- [ ] Conteos base de las tablas críticas para comparar después:
+  ```sql
+  SELECT 'users' AS tabla, COUNT(*) AS filas FROM users
+  UNION ALL SELECT 'students', COUNT(*) FROM students
+  UNION ALL SELECT 'employees', COUNT(*) FROM employees
+  UNION ALL SELECT 'doors', COUNT(*) FROM doors
+  UNION ALL SELECT 'exit_logs', COUNT(*) FROM exit_logs
+  UNION ALL SELECT 'lunch_logs', COUNT(*) FROM lunch_logs;
+  ```
+- [ ] Baseline de errores de las últimas 24 h revisado (5xx, 403 y 409) en `journalctl` y `audit_logs`.
+- [ ] Espacio libre suficiente para backup, archivos temporales y migración (`df -h`).
+
+#### 3. Backup y restore verificado
+
+- [ ] Backup completo ejecutado y comprimido sin errores:
+  ```bash
+  export DB_NAME=school_guard
+  export DB_USER=school_guard
+  export MYSQL_CONFIG=/etc/school-guard/mysql-backup.cnf
+  export BACKUP_DIR=/var/backups/school_guard
+  ./scripts/backup_db.sh
+  ```
+- [ ] Integridad del archivo comprobada (`gzip -t`) y copia fuera del servidor.
+- [ ] `app/data/photos` respaldado por separado.
+- [ ] Restore probado en staging desde ese backup y conteos coincidentes con el punto 2.
+- [ ] Backup y restore documentados con nombre de archivo y hora; el restore real en producción exige `CONFIRM_RESTORE=YES`.
+
+#### 4. Migraciones sobre copia restaurada
+
+- [ ] `alembic upgrade head` ejecutado sobre la copia restaurada sin errores.
+- [ ] `alembic check` sin deriva y conteos de filas conservados.
+- [ ] `alembic downgrade -1` probado en staging si el plan lo contempla; documentar las operaciones de una sola vía.
+- [ ] Enum real de `users.role` verificado contra producción (issue #1):
+  ```sql
+  SELECT COLUMN_TYPE
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'users'
+    AND COLUMN_NAME = 'role';
+  ```
+- [ ] Duplicados históricos de almuerzo detectados y archivados con aprobación explícita (issue #1):
+  ```sql
+  SELECT student_id, DATE(timestamp) AS dia, COUNT(*) AS total
+  FROM lunch_logs
+  WHERE student_id IS NOT NULL
+  GROUP BY student_id, DATE(timestamp)
+  HAVING COUNT(*) > 1;
+
+  SELECT employee_id, DATE(timestamp) AS dia, COUNT(*) AS total
+  FROM lunch_logs
+  WHERE employee_id IS NOT NULL
+  GROUP BY employee_id, DATE(timestamp)
+  HAVING COUNT(*) > 1;
+  ```
+- [ ] Reporte de duplicados exportado y guardado junto a la evidencia de la ventana.
+
+#### 5. Secretos y configuración
+
+- [ ] `.env` de producción con permisos `600` y propietario del usuario del servicio.
+- [ ] Variables obligatorias presentes y validadas al arranque: `APP_ENV=production`, `DATABASE_URL`, `SECRET_KEY`, `QR_SECRET_KEY_CURRENT`, `COOKIE_SECURE=true`.
+- [ ] `QR_SECRET_KEY_PREVIOUS` definida durante la transición de carnets; retiro planificado tras el periodo de gracia (~30 días).
+- [ ] Rotación de `SECRET_KEY` y de la contraseña de base de datos planificada con su efecto conocido: las sesiones actuales se invalidan y los usuarios deben volver a iniciar sesión.
+- [ ] `.env` retirado del índice y purga del historial coordinada por separado; la rotación se hace antes de la purga y nunca se ejecuta sin force-push acordado.
+- [ ] `BOOTSTRAP_ADMIN_PASSWORD` disponible solo si se requiere bootstrap (mínimo 12 caracteres); no registrar secretos en el historial del shell ni en tickets.
+- [ ] Contraseña del usuario `admin` rotada o planificada tras la ventana.
+
+#### 6. TLS, Nginx y modo mantenimiento
+
+- [ ] HTTPS responde antes de activar `COOKIE_SECURE=true`:
+  ```bash
+  curl -fsSI https://salidas.example.edu.co/healthz
+  curl -fsSI https://salidas.example.edu.co/sw.js
+  ```
+- [ ] `X-Forwarded-Proto`, `X-Request-ID` y `client_max_body_size` revisados en la configuración de Nginx.
+- [ ] Página o respuesta de mantenimiento probada y reversible.
+- [ ] Cámara y escaneo funcionan solo bajo HTTPS; permisos del navegador verificados en los equipos de portería y comedor.
+
+#### 7. Hardware, impresión y carnets
+
+- [ ] Impresora térmica con papel suficiente y página de prueba correcta.
+- [ ] Lector RFID y cámara probados en los equipos que se usarán durante la ventana.
+- [ ] Carnet v1 de prueba disponible; lote de reimpresión v2 planificado.
+- [ ] Reimpresión desde reportes verificada en staging con el flujo actual (ventana emergente y respaldo sin autoimpresión).
+- [ ] Contacto del proveedor de hardware disponible por si falla la impresora.
+
+#### 8. Smoke y comunicación
+
+- [ ] Smoke completo del issue #2 ensayado en staging y resultados adjuntos.
+- [ ] `/healthz`, `audit_logs` y `scan_attempts` revisados tras el ensayo.
+- [ ] Mensaje de inicio y fin de ventana preparado para el colegio.
+- [ ] Monitoreo y acceso a logs listos durante toda la ventana.
+
+#### 9. Go / No-Go
+
+La ventana se cancela si falla cualquiera de estos puntos:
+
+- Backup inexistente, corrupto o restore no verificado.
+- `alembic upgrade head` o `alembic check` con errores en la copia restaurada.
+- Duplicados de almuerzo sin archivar o enum de `users.role` incompatible.
+- HTTPS no verificado antes de `COOKIE_SECURE=true`.
+- Smoke de staging con fallos en registro de salidas, almuerzos o impresión.
+
+Criterio de rollback: restaurar el backup verificado y volver al commit anterior. Detener la ventana si falla un flujo crítico, aunque el resto funcione.
