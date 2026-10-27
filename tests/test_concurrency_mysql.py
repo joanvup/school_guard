@@ -130,7 +130,7 @@ def test_concurrent_exits_create_a_single_log(factory, people):
 
     outcomes = _concurrently(factory, scan)
 
-    assert sorted(outcome.status for outcome in outcomes) == ["duplicate", "success"]
+    assert sorted(outcome.status for outcome in outcomes) == ["success", "warning"]
 
     session = factory()
     try:
