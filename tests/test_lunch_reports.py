@@ -72,6 +72,8 @@ def test_reports_filter_by_lunch_type_and_person_type(client):
     assert all_logs.status_code == 200
     assert "Alumno Filtro" in all_logs.text
     assert "Empleado Filtro" in all_logs.text
+    assert "page=0" not in all_logs.text
+    assert "page=2" not in all_logs.text
 
     normal = client.get(f"{base}&lunch_type=Normal")
     assert normal.status_code == 200

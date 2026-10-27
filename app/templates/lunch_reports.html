@@ -146,14 +146,26 @@
             {{ pagination.total_records }} registros · Página {{ pagination.page }} de {{ pagination.total_pages }}
         </p>
         <div class="flex gap-2">
+            {% if pagination.has_prev %}
             <a href="/lunch/reports?date_start={{ filters.date_start }}&date_end={{ filters.date_end }}&lunch_type={{ filters.lunch_type or '' }}&person_type={{ filters.person_type or '' }}&page={{ pagination.page - 1 }}"
-                class="px-3 py-1 rounded text-sm border {{ 'bg-white text-blue-600 hover:bg-blue-50' if pagination.has_prev else 'bg-gray-100 text-gray-400 pointer-events-none' }}">
+                class="px-3 py-1 rounded text-sm border bg-white text-blue-600 hover:bg-blue-50">
                 Anterior
             </a>
+            {% else %}
+            <span class="px-3 py-1 rounded text-sm border bg-gray-100 text-gray-400" aria-disabled="true">
+                Anterior
+            </span>
+            {% endif %}
+            {% if pagination.has_next %}
             <a href="/lunch/reports?date_start={{ filters.date_start }}&date_end={{ filters.date_end }}&lunch_type={{ filters.lunch_type or '' }}&person_type={{ filters.person_type or '' }}&page={{ pagination.page + 1 }}"
-                class="px-3 py-1 rounded text-sm border {{ 'bg-white text-blue-600 hover:bg-blue-50' if pagination.has_next else 'bg-gray-100 text-gray-400 pointer-events-none' }}">
+                class="px-3 py-1 rounded text-sm border bg-white text-blue-600 hover:bg-blue-50">
                 Siguiente
             </a>
+            {% else %}
+            <span class="px-3 py-1 rounded text-sm border bg-gray-100 text-gray-400" aria-disabled="true">
+                Siguiente
+            </span>
+            {% endif %}
         </div>
     </div>
 </div>

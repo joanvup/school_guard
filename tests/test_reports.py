@@ -54,14 +54,18 @@ def test_reports_paginate_and_use_frozen_snapshots(client):
     assert "Página 1 de 2" in first_page.text
     assert "Ana Perez" in first_page.text
     assert "Nombre Editado" not in first_page.text
+    assert "page=0" not in first_page.text
+    assert "page=2" in first_page.text
 
     second_page = client.get("/reports/?page=2")
     assert second_page.status_code == 200
     assert "Página 2 de 2" in second_page.text
+    assert "page=3" not in second_page.text
 
     clamped = client.get("/reports/?page=999")
     assert clamped.status_code == 200
     assert "Página 2 de 2" in clamped.text
+    assert "page=3" not in clamped.text
 
 
 def test_reports_reject_invalid_door_filter(client):
