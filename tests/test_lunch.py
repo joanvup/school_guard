@@ -93,12 +93,9 @@ def test_plain_id_and_forged_qr_are_rejected(client):
         db.close()
 
 
-def test_rfid_only_matches_registered_rfid_code(client):
+def test_rfid_scan_still_matches_registered_rfid_code(client):
     login(client, "lunch", USER_PASSWORD)
     student = create_student(student_id="S302", rfid_code="RFID-302")
-
-    by_student_id = _process(client, method="rfid", code=student.student_id)
-    assert by_student_id.status_code == 403
 
     by_rfid = _process(client, method="rfid", code="RFID-302")
     assert by_rfid.status_code == 200
@@ -109,6 +106,127 @@ def test_rfid_only_matches_registered_rfid_code(client):
         log = db.query(models.LunchLog).one()
         assert log.student_id == student.id
         assert log.identification_method == "rfid"
+    finally:
+        db.close()
+
+
+def test_rfid_branch_accepts_student_id(client):
+    login(client, "lunch", USER_PASSWORD)
+    student = create_student(student_id="S500")
+
+    response = _process(client, method="rfid", code="S500")
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    assert response.json()["message"] == "ALMUERZO AUTORIZADO"
+
+    db = SessionLocal()
+    try:
+        log = db.query(models.LunchLog).one()
+        assert log.student_id == student.id
+        assert log.identification_method == "rfid"
+        attempt = db.query(models.ScanAttempt).one()
+        assert attempt.result == "success"
+    finally:
+        db.close()
+
+
+def test_rfid_branch_accepts_employee_doc_id(client):
+    login(client, "lunch", USER_PASSWORD)
+    employee = create_employee(doc_id="E500")
+
+    response = _process(client, method="rfid", code="E500")
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+
+    db = SessionLocal()
+    try:
+        log = db.query(models.LunchLog).one()
+        assert log.employee_id == employee.id
+        assert log.student_id is None
+    finally:
+        db.close()
+
+
+def test_rfid_branch_prefers_rfid_code_over_student_id(client):
+    login(client, "lunch", USER_PASSWORD)
+    rfid_student = create_student(student_id="S710", rfid_code="X900")
+    create_student(student_id="X900", rfid_code="RFID-900", full_name="Carnet Duplicado")
+
+    response = _process(client, method="rfid", code="X900")
+    assert response.status_code == 200
+    assert response.json()["person"]["name"] == rfid_student.full_name
+
+    db = SessionLocal()
+    try:
+        assert db.query(models.LunchLog).one().student_id == rfid_student.id
+    finally:
+        db.close()
+
+
+def test_rfid_branch_prefers_student_over_employee(client):
+    login(client, "lunch", USER_PASSWORD)
+    student = create_student(student_id="X100")
+    create_employee(doc_id="X100")
+
+    response = _process(client, method="rfid", code="X100")
+    assert response.status_code == 200
+
+    db = SessionLocal()
+    try:
+        log = db.query(models.LunchLog).one()
+        assert log.student_id == student.id
+        assert log.employee_id is None
+    finally:
+        db.close()
+
+
+def test_rfid_branch_unknown_code_is_denied(client):
+    login(client, "lunch", USER_PASSWORD)
+
+    response = _process(client, method="rfid", code="NO-EXISTE")
+    assert response.status_code == 403
+    assert response.json()["message"] == "NO ENCONTRADO O NO REGISTRADO"
+
+    db = SessionLocal()
+    try:
+        assert db.query(models.LunchLog).count() == 0
+        attempt = db.query(models.ScanAttempt).one()
+        assert attempt.result == "unknown_person"
+        assert attempt.method == "rfid"
+        assert len(attempt.code_hash) == 64
+        assert attempt.code_hash != "NO-EXISTE"
+    finally:
+        db.close()
+
+
+def test_search_people_matches_student_id_and_doc_id(client):
+    login(client, "lunch", USER_PASSWORD)
+    student = create_student(student_id="S600", full_name="Ana Perez")
+    employee = create_employee(doc_id="E600", full_name="Beto Ruiz")
+
+    by_student = client.get("/lunch/search_person?q=S600").json()
+    assert [(item["person_type"], item["person_id"]) for item in by_student] == [
+        ("student", student.id)
+    ]
+    assert all("code" not in item for item in by_student)
+
+    by_employee = client.get("/lunch/search_person?q=E600").json()
+    assert [(item["person_type"], item["person_id"]) for item in by_employee] == [
+        ("employee", employee.id)
+    ]
+
+    by_partial = client.get("/lunch/search_person?q=600").json()
+    assert {(item["person_type"], item["person_id"]) for item in by_partial} == {
+        ("student", student.id),
+        ("employee", employee.id),
+    }
+
+    manual = _process(client, method="manual", person_type="student", person_id=student.id)
+    assert manual.status_code == 200
+
+    db = SessionLocal()
+    try:
+        assert db.query(models.LunchLog).one().identification_method == "manual"
     finally:
         db.close()
 

@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 
 from fastapi import Request
+from sqlalchemy import case, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -68,11 +69,33 @@ def _find_person(
         return person, "employee" if person else None, None
 
     if payload.method == "rfid":
-        person = db.query(models.Student).filter(models.Student.rfid_code == payload.code).first()
-        if person:
-            return person, "student", None
-        person = db.query(models.Employee).filter(models.Employee.rfid_code == payload.code).first()
-        return person, "employee" if person else None, None
+        code = payload.code
+        student = (
+            db.query(models.Student)
+            .filter(
+                or_(
+                    models.Student.rfid_code == code,
+                    models.Student.student_id == code,
+                )
+            )
+            .order_by(case((models.Student.rfid_code == code, 0), else_=1))
+            .first()
+        )
+        if student:
+            return student, "student", None
+
+        employee = (
+            db.query(models.Employee)
+            .filter(
+                or_(
+                    models.Employee.rfid_code == code,
+                    models.Employee.doc_id == code,
+                )
+            )
+            .order_by(case((models.Employee.rfid_code == code, 0), else_=1))
+            .first()
+        )
+        return employee, "employee" if employee else None, None
 
     if payload.person_type == "student":
         person = db.query(models.Student).filter(models.Student.id == payload.person_id).first()
@@ -351,7 +374,10 @@ def search_people(db: Session, query_text: str) -> list[dict]:
         db.query(models.Student)
         .filter(
             models.Student.is_active.is_(True),
-            models.Student.full_name.ilike(pattern, escape="\\"),
+            or_(
+                models.Student.full_name.ilike(pattern, escape="\\"),
+                models.Student.student_id.ilike(pattern, escape="\\"),
+            ),
         )
         .order_by(models.Student.full_name)
         .limit(5)
@@ -361,7 +387,10 @@ def search_people(db: Session, query_text: str) -> list[dict]:
         db.query(models.Employee)
         .filter(
             models.Employee.is_active.is_(True),
-            models.Employee.full_name.ilike(pattern, escape="\\"),
+            or_(
+                models.Employee.full_name.ilike(pattern, escape="\\"),
+                models.Employee.doc_id.ilike(pattern, escape="\\"),
+            ),
         )
         .order_by(models.Employee.full_name)
         .limit(5)

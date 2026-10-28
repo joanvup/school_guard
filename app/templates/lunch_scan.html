@@ -63,7 +63,7 @@
         <div class="mb-4 relative">
             <input type="text" id="rfidInput"
                 class="w-full border-2 border-gray-300 rounded p-3 text-lg focus:border-green-500 focus:ring-green-200 focus:outline-none font-mono tracking-widest input-hidden-focus"
-                placeholder="Clic aquí para escanear QR o RFID..." autocomplete="off" inputmode="text">
+                placeholder="Escanee QR/RFID o digite el carnet y presione Enter..." autocomplete="off" inputmode="text">
 
             <div class="absolute right-3 top-4 text-gray-400">
                 <i class="fas fa-wifi"></i>
@@ -154,7 +154,7 @@
         </div>
         <div class="p-4">
             <div class="flex gap-2 mb-4">
-                <input type="text" id="searchInput" placeholder="Escriba nombre (min 3 letras)..."
+                <input type="text" id="searchInput" placeholder="Escriba nombre o código (min 3)..."
                     class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-300 outline-none"
                     onkeydown="if(event.key === 'Enter'){ event.preventDefault(); executeSearch(); }">
                 <button onclick="executeSearch()"
